@@ -1023,172 +1023,11 @@ Do not require adding every module to a central `index.ts`.
 
 ---
 
-# 6. Four-Person Scope and Code Ownership
-
-Use full vertical-slice ownership. Each engineer owns frontend, API, contracts, and tests for their domains.
-
-Replace the placeholder handles below with real GitHub usernames.
-
-## 6.1 Ownership matrix
-
-| Engineer | Primary ownership | Secondary responsibility |
-|---|---|---|
-| **P1 — Platform/Integration Owner** | Auth, sessions, RBAC, app shell, shared UI primitives, dashboard, notifications, CI, Docker, root config, Prisma schema/migrations, integration | Release manager and final merge authority |
-| **P2 — Organization/Asset Owner** | Departments, locations, categories and typed category fields, employees, roles UI, asset registration, directory and QR fields, asset details/history | Reviews P4 reports that consume asset data |
-| **P3 — Custody/Scheduling Owner** | Allocations, transfers, returns, overdue logic, resource bookings, overlap behavior, atomic cancel/rebook UX | Reviews concurrency and transaction tests |
-| **P4 — Maintenance/Audit/Reports Owner** | Maintenance workflow (incl. technician assignment), audit cycles (incl. expected location), discrepancies, reports (incl. utilization/idle/maintenance-frequency/retirement), CSV exports | Reviews lifecycle-state transitions |
-
-## 6.2 Path ownership
-
-### P1
-
-```text
-/apps/api/src/platform/**
-/apps/api/src/modules/auth/**
-/apps/api/src/modules/dashboard/**
-/apps/api/src/modules/notifications/**
-/apps/api/prisma/**
-/apps/api/src/app.ts
-/apps/api/src/server.ts
-/apps/web/src/app/**
-/apps/web/src/components/ui/**
-/apps/web/src/features/auth/**
-/apps/web/src/features/dashboard/**
-/apps/web/src/features/notifications/**
-/packages/contracts/src/auth/**
-/packages/contracts/src/dashboard/**
-/packages/contracts/src/notifications/**
-/infra/**
-/.github/**
-/package.json
-/pnpm-lock.yaml
-/pnpm-workspace.yaml
-```
-
-### P2
-
-```text
-/apps/api/src/modules/organization/**
-/apps/api/src/modules/assets/**
-/apps/web/src/features/organization/**
-/apps/web/src/features/assets/**
-/packages/contracts/src/organization/**
-/packages/contracts/src/assets/**
-```
-
-### P3
-
-```text
-/apps/api/src/modules/allocations/**
-/apps/api/src/modules/bookings/**
-/apps/web/src/features/allocations/**
-/apps/web/src/features/bookings/**
-/packages/contracts/src/allocations/**
-/packages/contracts/src/bookings/**
-```
-
-### P4
-
-```text
-/apps/api/src/modules/maintenance/**
-/apps/api/src/modules/audits/**
-/apps/api/src/modules/reports/**
-/apps/web/src/features/maintenance/**
-/apps/web/src/features/audits/**
-/apps/web/src/features/reports/**
-/packages/contracts/src/maintenance/**
-/packages/contracts/src/audits/**
-/packages/contracts/src/reports/**
-```
-
----
-
-## 6.3 Files with a single writer
-
-The following are deliberately single-writer files:
-
-- `pnpm-lock.yaml`
-- root `package.json`
-- `pnpm-workspace.yaml`
-- `apps/api/prisma/schema.prisma`
-- Prisma migration history
-- `apps/api/src/app.ts`
-- `apps/web/src/app/router/*`
-- shared UI primitives
-- global CSS/theme tokens
-- CI workflow files
-- environment schemas
-- CODEOWNERS
-
-Only P1 edits these files. Other engineers submit a short change request containing:
-
-- desired change;
-- domain reason;
-- proposed fields/routes;
-- backward-compatibility impact;
-- test impact.
-
-P1 applies the shared change in a small, isolated commit. This removes the most common merge-conflict hotspots.
-
-### Scheduled integration windows
-
-Use two brief integration windows per working day:
-
-1. schema/contract integration;
-2. route/UI-shell integration.
-
-Domain work should proceed against stubs or interfaces rather than waiting for every shared edit.
-
----
-
-## 6.4 Example CODEOWNERS
-
-```text
-*                                      @person-1
-
-/apps/api/src/modules/organization/    @person-2
-/apps/api/src/modules/assets/          @person-2
-/apps/web/src/features/organization/   @person-2
-/apps/web/src/features/assets/         @person-2
-/packages/contracts/src/organization/  @person-2
-/packages/contracts/src/assets/        @person-2
-
-/apps/api/src/modules/allocations/     @person-3
-/apps/api/src/modules/bookings/        @person-3
-/apps/web/src/features/allocations/    @person-3
-/apps/web/src/features/bookings/       @person-3
-/packages/contracts/src/allocations/   @person-3
-/packages/contracts/src/bookings/      @person-3
-
-/apps/api/src/modules/maintenance/     @person-4
-/apps/api/src/modules/audits/          @person-4
-/apps/api/src/modules/reports/         @person-4
-/apps/web/src/features/maintenance/    @person-4
-/apps/web/src/features/audits/         @person-4
-/apps/web/src/features/reports/        @person-4
-/packages/contracts/src/maintenance/   @person-4
-/packages/contracts/src/audits/        @person-4
-/packages/contracts/src/reports/       @person-4
-
-/apps/api/prisma/                      @person-1
-/apps/api/src/platform/                @person-1
-/apps/api/src/app.ts                   @person-1
-/apps/web/src/app/                     @person-1
-/apps/web/src/components/ui/           @person-1
-/.github/                              @person-1
-/package.json                          @person-1
-/pnpm-lock.yaml                        @person-1
-```
-
-Cross-domain changes require both domain owners plus P1.
-
----
-
-# 7. Git and Pull-Request Practice
+# 6. Git and Pull-Request Practice
 
 Use trunk-based development with short-lived branches.
 
-## 7.1 Branches
+## 6.1 Branches
 
 ```text
 feat/AF-123-asset-registration
@@ -1206,7 +1045,7 @@ Rules:
 - do not create long-running frontend/backend branches;
 - do not use one branch per engineer.
 
-## 7.2 Commits
+## 6.2 Commits
 
 Use Conventional Commits:
 
@@ -1227,7 +1066,7 @@ A commit must:
 - include tests with behavior changes;
 - not contain generated build output.
 
-## 7.3 Pull requests
+## 6.3 Pull requests
 
 Recommended PR size:
 
@@ -1249,7 +1088,7 @@ Every PR must include:
 
 Use squash merge after approval. The squash message follows Conventional Commits.
 
-## 7.4 Review rules
+## 6.4 Review rules
 
 - One approval from the domain owner.
 - P1 approval for shared files, database migrations, auth, CI, or root configuration.
@@ -1260,9 +1099,9 @@ Use squash merge after approval. The squash message follows Conventional Commits
 
 ---
 
-# 8. Database and Migration Practice
+# 7. Database and Migration Practice
 
-## 8.1 General rules
+## 7.1 General rules
 
 - PostgreSQL is the source of truth.
 - Use UUID primary keys generated server-side or database-side.
@@ -1277,7 +1116,7 @@ Use squash merge after approval. The squash message follows Conventional Commits
 - Avoid N+1 queries.
 - Select required columns; do not return entire models by default.
 
-## 8.2 Migration ownership
+## 7.2 Migration ownership
 
 P1 is the migration owner.
 
@@ -1299,7 +1138,7 @@ Never:
 - commit database dumps;
 - run destructive reset commands against shared environments.
 
-## 8.3 Transactions
+## 7.3 Transactions
 
 Use transactions for:
 
@@ -1314,7 +1153,7 @@ Use transactions for:
 
 The transaction boundary belongs in the service layer.
 
-## 8.4 Concurrency
+## 7.4 Concurrency
 
 User-friendly checks occur before writes, but constraints handle races.
 
@@ -1330,9 +1169,9 @@ Map constraint violations to stable `409 Conflict` errors:
 
 ---
 
-# 9. API Engineering Practice
+# 8. API Engineering Practice
 
-## 9.1 HTTP semantics
+## 8.1 HTTP semantics
 
 - `GET` reads and has no side effects.
 - `POST` creates or executes a command.
@@ -1350,7 +1189,7 @@ Map constraint violations to stable `409 Conflict` errors:
 - Use `429` for rate limiting.
 - Use `500` only for unexpected server failures.
 
-## 9.2 Validation
+## 8.2 Validation
 
 Validate at every external boundary:
 
@@ -1363,7 +1202,7 @@ Validate at every external boundary:
 
 Do not trust frontend validation.
 
-## 9.3 Idempotency
+## 8.3 Idempotency
 
 Approval and resolution commands should be safely repeatable:
 
@@ -1372,7 +1211,7 @@ Approval and resolution commands should be safely repeatable:
 
 For future external integrations, add idempotency keys. They are optional for the MVP UI.
 
-## 9.4 Observability
+## 8.4 Observability
 
 Each request receives a request ID.
 
@@ -1400,11 +1239,11 @@ Never log:
 
 ---
 
-# 10. Security Practice
+# 9. Security Practice
 
 Use a pragmatic OWASP-aligned baseline.
 
-## 10.1 Authentication
+## 9.1 Authentication
 
 - Hash passwords with Node `crypto.scrypt`.
 - Generate a unique random salt.
@@ -1418,7 +1257,7 @@ Use a pragmatic OWASP-aligned baseline.
 - Revoke sessions on deactivation.
 - Expire idle and absolute session lifetimes.
 
-## 10.2 Request protection
+## 9.2 Request protection
 
 - Enforce same-origin deployment for the MVP.
 - Validate `Origin` on state-changing requests.
@@ -1430,7 +1269,7 @@ Use a pragmatic OWASP-aligned baseline.
 - Normalize and validate uploaded attachment URLs.
 - Parameterize all database access through Prisma/raw parameter binding.
 
-## 10.3 Authorization
+## 9.3 Authorization
 
 Use policy functions such as:
 
@@ -1453,7 +1292,7 @@ Resource scope must consider:
 - assigned auditor;
 - elevated role.
 
-## 10.4 Secrets
+## 9.4 Secrets
 
 - Commit `.env.example`, never `.env`.
 - CI secrets come from the CI secret store.

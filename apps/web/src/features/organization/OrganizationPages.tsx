@@ -563,38 +563,44 @@ export function EmployeesPage() {
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            const selectedRoles = new FormData(event.currentTarget)
-              .getAll("roles")
-              .map((role) => ({ role: String(role) }));
+            const formData = new FormData(event.currentTarget);
+            const chosenRole = formData.get("role");
+            const selectedRoles = chosenRole ? [{ role: String(chosenRole) }] : [];
             if (selected)
               roles.mutate({ id: selected.id, roles: selectedRoles });
           }}
         >
           <p>
-            Employee access is always included. Add only the elevated
-            permissions this person needs.
+            Select exactly one role for this employee. Employee access is always
+            included as a baseline.
           </p>
-          {["EMPLOYEE", "ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD"].map(
-            (role) => (
-              <label className="check-row" key={role}>
-                <input
-                  type="checkbox"
-                  name="roles"
-                  value={role}
-                  defaultChecked={selected?.roles.some(
-                    (item) => item.role === role,
-                  )}
-                />
-                {role.replaceAll("_", " ")}
-              </label>
-            ),
-          )}
+          <div className="role-radio-group">
+            {["EMPLOYEE", "ADMIN", "ASSET_MANAGER", "DEPARTMENT_HEAD"].map(
+              (role) => (
+                <label className="role-radio-row" key={role}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value={role}
+                    defaultChecked={
+                      selected?.roles.length
+                        ? selected.roles[selected.roles.length - 1].role === role
+                        : role === "EMPLOYEE"
+                    }
+                  />
+                  <span className="role-radio-label">
+                    <strong>{role.replaceAll("_", " ")}</strong>
+                  </span>
+                </label>
+              ),
+            )}
+          </div>
           {roles.error && <p className="form-error">{roles.error.message}</p>}
           <div className="form-actions">
             <button type="button" onClick={() => setSelected(null)}>
               Cancel
             </button>
-            <button className="primary">Update roles</button>
+            <button className="primary">Update role</button>
           </div>
         </form>
       </Modal>

@@ -684,8 +684,97 @@ dd {
 }
 .small-action {
   font-size: 0.72rem;
-  padding: 0.4rem 0.55rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 7px;
+  font-weight: 700;
   color: var(--green);
+}
+.small-action.good {
+  background: var(--green-soft);
+  color: var(--green-dark);
+  border-color: #9dc9a8;
+}
+.small-action.danger {
+  color: var(--danger);
+  border-color: #e8c0bc;
+}
+/* Field-level validation error */
+.field-error {
+  display: block;
+  color: var(--danger);
+  font-size: 0.76rem;
+  font-weight: 500;
+  margin-top: 0.2rem;
+}
+/* Role radio selector */
+.role-radio-group {
+  display: grid;
+  gap: 0.45rem;
+}
+.role-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.role-radio-row:has(input:checked) {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.role-radio-row input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--green);
+}
+.role-radio-label strong {
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+}
+/* Maintenance kanban card */
+.mcard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+.mcard-date {
+  color: var(--muted);
+  font-size: 0.71rem;
+}
+.mcard-asset {
+  font-size: 0.9rem;
+  margin: 0 0 0.35rem;
+  color: #1c2921;
+  font-weight: 750;
+  line-height: 1.3;
+}
+.mcard-desc {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin: 0 0 0.5rem;
+}
+.mcard-tech {
+  font-size: 0.76rem;
+  color: var(--green-dark);
+  background: var(--green-soft);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  margin: 0 0 0.5rem;
+  display: inline-block;
+}
+.mcard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
 }
 .audit-summary {
   display: grid;
