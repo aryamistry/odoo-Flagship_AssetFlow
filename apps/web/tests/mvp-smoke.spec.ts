@@ -155,3 +155,82 @@ test("asset managers can review a pending return with condition and notes", asyn
   ).toBeVisible();
   await expect(page.getByLabel("Check-in condition")).toHaveValue("FAIR");
 });
+test("asset registration renders and submits required typed category fields", async ({
+  page,
+}) => {
+  const categoryId = "00000000-0000-4000-8000-000000000401";
+  const fieldId = "00000000-0000-4000-8000-000000000411";
+  let submitted: Record<string, unknown> | undefined;
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname.replace("/api/v1", "");
+    if (path === "/auth/me")
+      return route.fulfill({
+        json: { data: actor, meta: { requestId: "test" } },
+      });
+    if (path === "/categories")
+      return route.fulfill({
+        json: {
+          data: [
+            { id: categoryId, code: "ROOM", name: "Room", status: "ACTIVE" },
+          ],
+          meta: { requestId: "test" },
+        },
+      });
+    if (path === `/categories/${categoryId}/fields`)
+      return route.fulfill({
+        json: {
+          data: [
+            {
+              id: fieldId,
+              fieldKey: "capacity",
+              label: "Capacity",
+              fieldType: "INTEGER",
+              isRequired: true,
+              optionsJson: null,
+              validationJson: null,
+              status: "ACTIVE",
+              sortOrder: 0,
+            },
+          ],
+          meta: { requestId: "test" },
+        },
+      });
+    if (path === "/assets" && route.request().method() === "POST") {
+      submitted = route.request().postDataJSON();
+      return route.fulfill({
+        status: 201,
+        json: { data: { id: "asset-1" }, meta: { requestId: "test" } },
+      });
+    }
+    if (path === "/assets/asset-1")
+      return route.fulfill({
+        json: {
+          data: {
+            id: "asset-1",
+            assetTag: "AF-0007",
+            name: "Training Room",
+            status: "AVAILABLE",
+            condition: "GOOD",
+            categoryId,
+            currentLocationId: null,
+            owningDepartmentId: null,
+            serialNumber: null,
+            isBookable: true,
+            version: 1,
+            createdAt: "2026-07-12T00:00:00Z",
+          },
+          meta: { requestId: "test" },
+        },
+      });
+    return route.fulfill({ json: { data: [], meta: { requestId: "test" } } });
+  });
+  await page.goto("/assets/new");
+  await page.getByLabel("Asset name").fill("Training Room");
+  await page.getByLabel("Category").selectOption(categoryId);
+  await page.getByLabel("Capacity").fill("12");
+  await page.getByRole("button", { name: "Register asset" }).click();
+  await expect.poll(() => submitted).toBeTruthy();
+  expect(submitted?.fields).toEqual([
+    { fieldDefinitionId: fieldId, value: 12 },
+  ]);
+});
