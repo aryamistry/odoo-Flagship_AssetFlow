@@ -7,8 +7,10 @@ import {
   AssetsPage,
   AssetDetailPage,
   NewAssetPage,
+  QrLookupPage,
 } from "../features/assets/AssetPages";
 import {
+  DemoResetPage,
   EmployeesPage,
   OrganizationSetupPage,
 } from "../features/organization/OrganizationPages";
@@ -22,6 +24,7 @@ import { AuditsPage, AuditDetailPage } from "../features/audits/AuditPages";
 import { ReportsPage } from "../features/reports/ReportsPage";
 import { NotificationsPage } from "../features/notifications/NotificationsPage";
 import { Loading } from "../components/ui";
+
 function Protected() {
   const auth = useAuth();
   const location = useLocation();
@@ -35,6 +38,7 @@ function Protected() {
     return <Navigate to="/login" replace state={{ from: location }} />;
   return <AppShell />;
 }
+
 export function App() {
   return (
     <Routes>
@@ -44,6 +48,7 @@ export function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/assets" element={<AssetsPage />} />
         <Route path="/assets/new" element={<NewAssetPage />} />
+        <Route path="/assets/lookup" element={<QrLookupPage />} />
         <Route path="/assets/:id" element={<AssetDetailPage />} />
         <Route path="/allocations" element={<AllocationsPage />} />
         <Route path="/transfers" element={<TransfersPage />} />
@@ -66,6 +71,7 @@ export function App() {
           element={<OrganizationSetupPage />}
         />
         <Route path="/organization/employees" element={<EmployeesPage />} />
+        <Route path="/organization/demo-reset" element={<DemoResetPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../../platform/auth/session.js";
@@ -171,4 +172,12 @@ operationsRouter.get(
       }),
     ),
   ),
+);
+operationsRouter.post(
+  "/operations/demo-reset",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    execSync("npx tsx prisma/seed.ts", { cwd: process.cwd() });
+    return data(req, res, { ok: true });
+  }),
 );

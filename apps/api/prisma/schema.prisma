@@ -283,6 +283,7 @@ model Asset {
   acquisitionCostMinor BigInt? @map("acquisition_cost_minor")
   acquisitionCurrency String? @map("acquisition_currency") @db.Char(3)
   expectedRetirementOn DateTime? @map("expected_retirement_on") @db.Date
+  warrantyExpiryDate DateTime? @map("warranty_expiry_date") @db.Date
   attachmentUrl String? @map("attachment_url")
   createdByUserId String @map("created_by_user_id") @db.Uuid
   version Int @default(1)

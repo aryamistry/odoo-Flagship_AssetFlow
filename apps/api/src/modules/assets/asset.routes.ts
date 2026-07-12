@@ -1,9 +1,48 @@
 import { Router } from "express"; import { z } from "zod"; import { assetConditions, assetStatuses, paginationSchema } from "@assetflow/contracts";
 import { requireAuth, requireRole } from "../../platform/auth/session.js"; import { asyncHandler, data, pageMeta } from "../../platform/http/async-handler.js"; import * as service from "./asset.service.js";
+import { toCsv } from "../reports/report.service.js";
 export const assetRouter = Router(); assetRouter.use(requireAuth); const id = z.uuid();
-const create = z.object({ name: z.string().min(1).max(150), categoryId: id, serialNumber: z.string().max(100).optional(), qrCode: z.string().max(100).optional(), condition: z.enum(assetConditions).default("GOOD"), owningDepartmentId: id.optional(), currentLocationId: id.optional(), isBookable: z.boolean().optional(), acquisitionDate: z.iso.date().optional(), acquisitionCostMinor: z.number().int().nonnegative().optional(), acquisitionCurrency: z.string().length(3).optional(), expectedRetirementOn: z.iso.date().optional(), attachmentUrl: z.url().optional(), fields: z.array(z.object({ fieldDefinitionId: id, value: z.unknown() })).optional() });
-assetRouter.get("/assets", asyncHandler(async (req, res) => { const p = paginationSchema.extend({ search: z.string().optional(), categoryId: id.optional(), status: z.enum(assetStatuses).optional(), departmentId: id.optional(), locationId: id.optional() }).parse(req.query); const result = await service.listAssets(req.actor!.organizationId, p); return data(req, res, result.items, 200, pageMeta(p.page, p.pageSize, result.total)); }));
+const create = z.object({ name: z.string().min(1).max(150), categoryId: id, serialNumber: z.string().max(100).optional(), qrCode: z.string().max(100).optional(), condition: z.enum(assetConditions).default("GOOD"), owningDepartmentId: id.optional(), currentLocationId: id.optional(), isBookable: z.boolean().optional(), acquisitionDate: z.iso.date().optional(), acquisitionCostMinor: z.number().int().nonnegative().optional(), acquisitionCurrency: z.string().length(3).optional(), expectedRetirementOn: z.iso.date().optional(), warrantyExpiryDate: z.iso.date().optional(), attachmentUrl: z.url().optional(), fields: z.array(z.object({ fieldDefinitionId: id, value: z.unknown() })).optional() });
+
+assetRouter.get("/assets/lookup", asyncHandler(async (req, res) => {
+  const token = z.string().min(1).parse(req.query.token);
+  return data(req, res, await service.lookupByToken(req.actor!.organizationId, token));
+}));
+
+assetRouter.get("/assets/export.csv", asyncHandler(async (req, res) => {
+  const filters = z.object({
+    search: z.string().optional(),
+    categoryId: id.optional(),
+    status: z.enum(assetStatuses).optional(),
+    departmentId: id.optional(),
+    locationId: id.optional()
+  }).parse(req.query);
+  const rows = await service.exportAssets(req.actor!.organizationId, filters);
+  res.type("text/csv").attachment(`assets-export.csv`).send(toCsv(rows as Array<Record<string, unknown>>));
+}));
+
+assetRouter.post("/assets/bulk-import", requireRole("ASSET_MANAGER"), asyncHandler(async (req, res) => {
+  const body = z.object({
+    confirm: z.boolean().default(false),
+    rows: z.array(z.any())
+  }).parse(req.body);
+  return data(req, res, await service.bulkImport(req.actor!.id, req.actor!.organizationId, req.requestId, body));
+}));
+
+assetRouter.post("/assets/bulk-update", requireRole("ASSET_MANAGER"), asyncHandler(async (req, res) => {
+  const body = z.object({
+    ids: z.array(id),
+    currentLocationId: id.nullable().optional(),
+    owningDepartmentId: id.nullable().optional(),
+    condition: z.enum(assetConditions).optional(),
+    status: z.enum(assetStatuses).optional()
+  }).parse(req.body);
+  return data(req, res, await service.bulkUpdate(req.actor!.id, req.requestId, req.actor!.organizationId, body));
+}));
+
+assetRouter.get("/assets", asyncHandler(async (req, res) => { const p = paginationSchema.extend({ search: z.string().optional(), categoryId: id.optional(), status: z.enum(assetStatuses).optional(), departmentId: id.optional(), locationId: id.optional(), warranty: z.enum(["expiring", "expired"]).optional() }).parse(req.query); const result = await service.listAssets(req.actor!.organizationId, p); return data(req, res, result.items, 200, pageMeta(p.page, p.pageSize, result.total)); }));
 assetRouter.post("/assets", requireRole("ASSET_MANAGER"), asyncHandler(async (req, res) => data(req, res, await service.createAsset(req.actor!.id, req.actor!.organizationId, req.requestId, create.parse(req.body)), 201)));
 assetRouter.get("/assets/:id", asyncHandler(async (req, res) => data(req, res, await service.getAsset(id.parse(req.params.id), req.actor!.organizationId))));
-assetRouter.patch("/assets/:id", requireRole("ASSET_MANAGER"), asyncHandler(async (req, res) => data(req, res, await service.updateAsset(req.actor!.id, req.requestId, id.parse(req.params.id), req.actor!.organizationId, create.pick({ name: true, serialNumber: true, qrCode: true, condition: true, owningDepartmentId: true, currentLocationId: true, attachmentUrl: true, expectedRetirementOn: true }).partial().extend({ description: z.string().nullable().optional(), serialNumber: z.string().nullable().optional(), qrCode: z.string().nullable().optional(), owningDepartmentId: id.nullable().optional(), currentLocationId: id.nullable().optional(), attachmentUrl: z.url().nullable().optional(), expectedRetirementOn: z.iso.date().nullable().optional(), version: z.number().int().positive() }).parse(req.body)))));
+assetRouter.patch("/assets/:id", requireRole("ASSET_MANAGER"), asyncHandler(async (req, res) => data(req, res, await service.updateAsset(req.actor!.id, req.requestId, id.parse(req.params.id), req.actor!.organizationId, create.pick({ name: true, serialNumber: true, qrCode: true, condition: true, owningDepartmentId: true, currentLocationId: true, attachmentUrl: true, expectedRetirementOn: true, warrantyExpiryDate: true }).partial().extend({ description: z.string().nullable().optional(), serialNumber: z.string().nullable().optional(), qrCode: z.string().nullable().optional(), owningDepartmentId: id.nullable().optional(), currentLocationId: id.nullable().optional(), attachmentUrl: z.url().nullable().optional(), expectedRetirementOn: z.iso.date().nullable().optional(), warrantyExpiryDate: z.iso.date().nullable().optional(), version: z.number().int().positive() }).parse(req.body)))));
 assetRouter.get("/assets/:id/history", asyncHandler(async (req, res) => data(req, res, await service.history(id.parse(req.params.id), req.actor!.organizationId))));
+

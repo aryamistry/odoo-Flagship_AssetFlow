@@ -607,3 +607,77 @@ export function EmployeesPage() {
     </Page>
   );
 }
+
+export function DemoResetPage() {
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const client = useQueryClient();
+
+  const handleReset = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await post("/operations/demo-reset", {});
+      setDone(true);
+      setConfirm(false);
+      client.invalidateQueries();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reset failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Page
+      title="Demo Reset"
+      description="Admin-only action: wipes all data and re-seeds the database with demonstration data."
+    >
+      <Card className="form-card">
+        <div style={{ textAlign: "center", padding: "2rem 1rem" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+          <h2 style={{ color: "var(--danger)" }}>Danger Zone</h2>
+          <p style={{ maxWidth: 480, margin: "0 auto 1.5rem" }}>
+            This action will <strong>permanently delete all data</strong> in this organization and
+            reload demonstration seed data. This cannot be undone.
+          </p>
+          {done ? (
+            <p style={{ color: "var(--green-dark)", fontWeight: 700 }}>
+              ✓ Demo data has been restored successfully.
+            </p>
+          ) : (
+            <>
+              {!confirm ? (
+                <button
+                  className="danger"
+                  id="demo-reset-btn"
+                  onClick={() => setConfirm(true)}
+                >
+                  Reset to demo data
+                </button>
+              ) : (
+                <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+                  <p style={{ width: "100%", color: "var(--danger)", fontWeight: 700 }}>
+                    Are you absolutely sure? This cannot be undone.
+                  </p>
+                  <button type="button" onClick={() => setConfirm(false)}>Cancel</button>
+                  <button
+                    className="danger"
+                    disabled={loading}
+                    onClick={handleReset}
+                    id="demo-reset-confirm-btn"
+                  >
+                    {loading ? "Resetting…" : "Yes, reset everything"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {error && <p className="form-error" style={{ marginTop: "1rem" }}>{error}</p>}
+        </div>
+      </Card>
+    </Page>
+  );
+}
