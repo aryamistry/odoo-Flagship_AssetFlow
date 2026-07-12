@@ -4,7 +4,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { env } from "./platform/config/env.js";
-import { errorHandler, notFound } from "./platform/http/errors.js";
+import { AppError, errorHandler, notFound } from "./platform/http/errors.js";
 import { authenticate } from "./platform/auth/session.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { organizationRouter } from "./modules/organization/organization.routes.js";
@@ -23,6 +23,12 @@ export function createApp() {
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
+  app.use((req, _res, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+    const origin = req.header("origin");
+    if (origin && origin !== env.WEB_ORIGIN) return next(new AppError(403, "INVALID_ORIGIN", "The request origin is not allowed."));
+    next();
+  });
   app.use((req, res, next) => {
     req.requestId = req.header("x-request-id") ?? crypto.randomUUID();
     res.setHeader("x-request-id", req.requestId);

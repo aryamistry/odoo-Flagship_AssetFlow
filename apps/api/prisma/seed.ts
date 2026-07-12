@@ -93,7 +93,8 @@ async function main() {
   await prisma.booking.upsert({ where: { id: "00000000-0000-4000-8000-000000000701" }, update: { startAt: hours(24), endAt: hours(26), effectiveStartAt: hours(24), effectiveEndAt: hours(26) }, create: { id: "00000000-0000-4000-8000-000000000701", organizationId: ids.org, assetId: ids.meetingRoom, requestedByUserId: ids.employee, bookedForUserId: ids.employee, title: "Engineering planning", startAt: hours(24), endAt: hours(26), effectiveStartAt: hours(24), effectiveEndAt: hours(26), status: "CONFIRMED" } });
 
   await prisma.maintenanceRequest.upsert({ where: { id: "00000000-0000-4000-8000-000000000801" }, update: {}, create: { id: "00000000-0000-4000-8000-000000000801", organizationId: ids.org, assetId: ids.printer, requestedByUserId: ids.employee, issueDescription: "Paper feed mechanism jams", priority: "HIGH", status: "TECHNICIAN_ASSIGNED", assignedTechnicianUserId: ids.manager, approvedByUserId: ids.manager, approvedAt: now, previousAssetStatus: "AVAILABLE" } });
-  await prisma.maintenanceEvent.createMany({ data: [{ organizationId: ids.org, maintenanceRequestId: "00000000-0000-4000-8000-000000000801", toStatus: "TECHNICIAN_ASSIGNED", performedByUserId: ids.manager }], skipDuplicates: true });
+  await prisma.maintenanceEvent.deleteMany({ where: { maintenanceRequestId: "00000000-0000-4000-8000-000000000801" } });
+  await prisma.maintenanceEvent.create({ data: { organizationId: ids.org, maintenanceRequestId: "00000000-0000-4000-8000-000000000801", toStatus: "TECHNICIAN_ASSIGNED", performedByUserId: ids.manager } });
   await prisma.maintenanceRequest.upsert({ where: { id: "00000000-0000-4000-8000-000000000802" }, update: {}, create: { id: "00000000-0000-4000-8000-000000000802", organizationId: ids.org, assetId: ids.projector, requestedByUserId: ids.employee, issueDescription: "Image flickers after warm-up", priority: "MEDIUM" } });
 
   const auditId = "00000000-0000-4000-8000-000000000901";

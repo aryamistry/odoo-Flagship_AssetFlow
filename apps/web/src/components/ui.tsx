@@ -1,0 +1,11 @@
+import type { ReactNode } from "react";
+export function Page({ title, description, action, children }: { title: string; description?: string; action?: ReactNode; children: ReactNode }) { return <div className="page"><header className="page-header"><div><h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</header>{children}</div>; }
+export function Card({ children, className = "" }: { children: ReactNode; className?: string }) { return <section className={`card ${className}`}>{children}</section>; }
+export function Loading() { return <div className="state" role="status">Loading…</div>; }
+export function Empty({ children = "Nothing here yet." }: { children?: ReactNode }) { return <div className="state empty">{children}</div>; }
+export function ErrorState({ error }: { error: unknown }) { return <div className="state error" role="alert">{error instanceof Error ? error.message : "Something went wrong."}</div>; }
+export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "good" | "warn" | "bad" | "info" }) { return <span className={`badge ${tone}`}>{children}</span>; }
+export function statusTone(value: string): "neutral" | "good" | "warn" | "bad" | "info" { if (["AVAILABLE", "APPROVED", "CONFIRMED", "VERIFIED", "RESOLVED", "CLOSED"].includes(value)) return "good"; if (["PENDING", "FAIR", "REVIEW", "TECHNICIAN_ASSIGNED"].includes(value)) return "warn"; if (["LOST", "DAMAGED", "REJECTED", "OVERDUE"].includes(value)) return "bad"; if (["IN_PROGRESS", "ALLOCATED", "ONGOING"].includes(value)) return "info"; return "neutral"; }
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) { return <label className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>; }
+export function Modal({ title, open, onClose, children }: { title: string; open: boolean; onClose(): void; children: ReactNode }) { if (!open) return null; return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><header><h2>{title}</h2><button className="icon-button" onClick={onClose} aria-label="Close">×</button></header>{children}</section></div>; }
+
