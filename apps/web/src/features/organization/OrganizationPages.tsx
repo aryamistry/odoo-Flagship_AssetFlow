@@ -463,6 +463,9 @@ type Employee = {
 export function EmployeesPage() {
   const client = useQueryClient();
   const [selected, setSelected] = useState<Employee | null>(null);
+  const selectedRole = selected?.roles?.length
+    ? selected.roles[selected.roles.length - 1]?.role ?? null
+    : null;
   const query = useQuery({
     queryKey: ["employees"],
     queryFn: () =>
@@ -582,11 +585,7 @@ export function EmployeesPage() {
                     type="radio"
                     name="role"
                     value={role}
-                    defaultChecked={
-                      selected?.roles.length
-                        ? selected.roles[selected.roles.length - 1].role === role
-                        : role === "EMPLOYEE"
-                    }
+                    defaultChecked={selectedRole === role || (!selectedRole && role === "EMPLOYEE")}
                   />
                   <span className="role-radio-label">
                     <strong>{role.replaceAll("_", " ")}</strong>
