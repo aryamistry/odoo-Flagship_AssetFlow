@@ -719,7 +719,9 @@ dd {
   border: 1.5px solid var(--line);
   border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
 }
 .role-radio-row:has(input:checked) {
   border-color: var(--green);
@@ -1046,5 +1048,82 @@ dd {
   .alert-banner {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  gap: 0.65rem;
+  overflow-x: auto;
+}
+.schedule-grid.month {
+  grid-template-columns: repeat(7, minmax(130px, 1fr));
+}
+.schedule-day {
+  min-height: 180px;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.schedule-day > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
+}
+.schedule-day > header small,
+.schedule-booking small,
+.list-row small {
+  display: block;
+  color: var(--muted);
+}
+.schedule-booking {
+  display: grid;
+  gap: 0.22rem;
+  margin: 0.45rem 0;
+  padding: 0.5rem;
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 0.82rem;
+}
+.schedule-booking .badge {
+  width: fit-content;
+}
+.two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.two-column > .card,
+.page > .card {
+  margin-top: 1rem;
+}
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.list-row:last-child {
+  border-bottom: 0;
+}
+.list-row > div:first-child {
+  min-width: 0;
+}
+.list-row .actions {
+  margin-left: auto;
+}
+@media (max-width: 820px) {
+  .two-column {
+    grid-template-columns: 1fr;
+  }
+  .schedule-grid.month {
+    grid-template-columns: repeat(7, minmax(115px, 1fr));
   }
 }

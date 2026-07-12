@@ -1,6 +1,174 @@
-import { Router } from "express"; import { z } from "zod"; import { requireAuth, requireRole } from "../../platform/auth/session.js"; import { asyncHandler, data } from "../../platform/http/async-handler.js"; import { prisma } from "../../platform/database/prisma.js"; import { summary } from "../dashboard/dashboard.service.js"; import { reportNames, runReport, toCsv } from "../reports/report.service.js"; import { runBookingReminders } from "../bookings/booking.service.js";
-export const operationsRouter = Router(); operationsRouter.use(requireAuth); const id = z.uuid(); const reportName = z.enum(reportNames); const reportQuery = z.object({ from: z.iso.datetime().optional(), to: z.iso.datetime().optional() });
-operationsRouter.get("/dashboard/summary", asyncHandler(async (req, res) => data(req, res, await summary(req.actor!.organizationId)))); operationsRouter.get("/notifications", asyncHandler(async (req, res) => data(req, res, await prisma.notification.findMany({ where: { organizationId: req.actor!.organizationId, recipientUserId: req.actor!.id }, orderBy: { createdAt: "desc" } })))); operationsRouter.post("/notifications/:id/read", asyncHandler(async (req, res) => { const item = await prisma.notification.findFirst({ where: { id: id.parse(req.params.id), organizationId: req.actor!.organizationId, recipientUserId: req.actor!.id } }); if (!item) return res.status(404).json({ code: "NOT_FOUND" }); return data(req, res, await prisma.notification.update({ where: { id: item.id }, data: { readAt: new Date() } })); }));
-operationsRouter.get("/activity-logs", asyncHandler(async (req, res) => data(req, res, await prisma.activityLog.findMany({ where: { organizationId: req.actor!.organizationId }, orderBy: { createdAt: "desc" }, take: 100 })))); operationsRouter.get("/activity-logs/:id", asyncHandler(async (req, res) => data(req, res, await prisma.activityLog.findFirst({ where: { id: id.parse(req.params.id), organizationId: req.actor!.organizationId } }))));
-operationsRouter.get("/reports/:reportName.csv", asyncHandler(async (req, res) => { const query = reportQuery.parse(req.query); const rows = await runReport(reportName.parse(req.params.reportName), req.actor!.organizationId, query.from, query.to); res.type("text/csv").attachment(`${req.params.reportName}.csv`).send(toCsv(rows as Array<Record<string, unknown>>)); })); operationsRouter.get("/reports/:reportName", asyncHandler(async (req, res) => { const query = reportQuery.parse(req.query); return data(req, res, await runReport(reportName.parse(req.params.reportName), req.actor!.organizationId, query.from, query.to)); }));
-operationsRouter.post("/operations/jobs/booking-reminders", requireRole("ADMIN"), asyncHandler(async (req, res) => data(req, res, await runBookingReminders(req.actor!.organizationId))));
+import { Router } from "express";
+import { z } from "zod";
+import { requireAuth, requireRole } from "../../platform/auth/session.js";
+import { asyncHandler, data } from "../../platform/http/async-handler.js";
+import { prisma } from "../../platform/database/prisma.js";
+import { summary } from "../dashboard/dashboard.service.js";
+import { reportNames, runReport, toCsv } from "../reports/report.service.js";
+import {
+  getNotificationPreferences,
+  runBookingReminders,
+  setNotificationPreference,
+} from "../bookings/booking.service.js";
+export const operationsRouter = Router();
+operationsRouter.use(requireAuth);
+const id = z.uuid();
+const reportName = z.enum(reportNames);
+const reportQuery = z.object({
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
+operationsRouter.get(
+  "/dashboard/summary",
+  asyncHandler(async (req, res) =>
+    data(req, res, await summary(req.actor!.organizationId)),
+  ),
+);
+operationsRouter.get(
+  "/notifications",
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await prisma.notification.findMany({
+        where: {
+          organizationId: req.actor!.organizationId,
+          recipientUserId: req.actor!.id,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ),
+  ),
+);
+operationsRouter.post(
+  "/notifications/:id/read",
+  asyncHandler(async (req, res) => {
+    const item = await prisma.notification.findFirst({
+      where: {
+        id: id.parse(req.params.id),
+        organizationId: req.actor!.organizationId,
+        recipientUserId: req.actor!.id,
+      },
+    });
+    if (!item) return res.status(404).json({ code: "NOT_FOUND" });
+    return data(
+      req,
+      res,
+      await prisma.notification.update({
+        where: { id: item.id },
+        data: { readAt: new Date() },
+      }),
+    );
+  }),
+);
+operationsRouter.get(
+  "/notifications/preferences",
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await getNotificationPreferences(
+        req.actor!.id,
+        req.actor!.organizationId,
+      ),
+    ),
+  ),
+);
+operationsRouter.put(
+  "/notifications/preferences/:type",
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await setNotificationPreference(
+        req.actor!.id,
+        req.actor!.organizationId,
+        z.string().trim().min(1).max(80).parse(req.params.type),
+        z.object({ isEnabled: z.boolean() }).parse(req.body).isEnabled,
+      ),
+    ),
+  ),
+);
+operationsRouter.get(
+  "/activity-logs",
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await prisma.activityLog.findMany({
+        where: { organizationId: req.actor!.organizationId },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+    ),
+  ),
+);
+operationsRouter.get(
+  "/activity-logs/:id",
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await prisma.activityLog.findFirst({
+        where: {
+          id: id.parse(req.params.id),
+          organizationId: req.actor!.organizationId,
+        },
+      }),
+    ),
+  ),
+);
+operationsRouter.get(
+  "/reports/:reportName.csv",
+  asyncHandler(async (req, res) => {
+    const query = reportQuery.parse(req.query);
+    const rows = await runReport(
+      reportName.parse(req.params.reportName),
+      req.actor!.organizationId,
+      query.from,
+      query.to,
+    );
+    res
+      .type("text/csv")
+      .attachment(`${req.params.reportName}.csv`)
+      .send(toCsv(rows as Array<Record<string, unknown>>));
+  }),
+);
+operationsRouter.get(
+  "/reports/:reportName",
+  asyncHandler(async (req, res) => {
+    const query = reportQuery.parse(req.query);
+    return data(
+      req,
+      res,
+      await runReport(
+        reportName.parse(req.params.reportName),
+        req.actor!.organizationId,
+        query.from,
+        query.to,
+      ),
+    );
+  }),
+);
+operationsRouter.post(
+  "/operations/jobs/booking-reminders",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) =>
+    data(req, res, await runBookingReminders(req.actor!.organizationId)),
+  ),
+);
+operationsRouter.get(
+  "/operations/jobs",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) =>
+    data(
+      req,
+      res,
+      await prisma.jobRun.findMany({
+        where: { organizationId: req.actor!.organizationId },
+        orderBy: { startedAt: "desc" },
+        take: 100,
+      }),
+    ),
+  ),
+);
