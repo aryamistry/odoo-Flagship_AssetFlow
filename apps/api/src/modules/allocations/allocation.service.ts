@@ -2,7 +2,14 @@ import type { AssetCondition } from "@prisma/client";
 import { prisma, logActivity, notify } from "../../platform/trace/trace.service.js";
 import { AppError } from "../../platform/http/errors.js";
 
-export async function listAllocations(organizationId: string, activeOnly = false) { return prisma.allocation.findMany({ where: { organizationId, ...(activeOnly ? { endedAt: null } : {}) }, orderBy: { allocatedAt: "desc" } }); }
+export async function listAllocations(organizationId: string, activeOnly = false, page = 1, pageSize = 25) {
+  const where = { organizationId, ...(activeOnly ? { endedAt: null } : {}) };
+  const [items, total] = await prisma.$transaction([
+    prisma.allocation.findMany({ where, orderBy: { allocatedAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.allocation.count({ where })
+  ]);
+  return { items, total };
+}
 export async function getAllocation(id: string, organizationId: string) { const item = await prisma.allocation.findFirst({ where: { id, organizationId } }); if (!item) throw new AppError(404, "ALLOCATION_NOT_FOUND", "Allocation not found."); return item; }
 export async function createAllocation(actorId: string, organizationId: string, requestId: string, input: { assetId: string; allocatedToUserId?: string; allocatedToDepartmentId?: string; expectedReturnAt?: string; checkoutCondition: AssetCondition; checkoutNotes?: string }) {
   return prisma.$transaction(async (tx) => {
@@ -15,7 +22,14 @@ export async function createAllocation(actorId: string, organizationId: string, 
   });
 }
 export async function requestReturn(actorId: string, organizationId: string, requestId: string, allocationId: string, input: { proposedCondition?: AssetCondition; requestNotes?: string }) { const allocation = await getAllocation(allocationId, organizationId); if (allocation.endedAt) throw new AppError(409, "ALLOCATION_ENDED", "This allocation has already ended."); const item = await prisma.returnRequest.create({ data: { organizationId, allocationId, requestedByUserId: actorId, proposedCondition: input.proposedCondition ?? null, requestNotes: input.requestNotes ?? null } }); await logActivity(prisma, { organizationId, actorUserId: actorId, requestId, action: "RETURN_REQUESTED", entityType: "RETURN_REQUEST", entityId: item.id, summary: "Requested an asset return." }); return item; }
-export async function listReturns(organizationId: string) { return prisma.returnRequest.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }); }
+export async function listReturns(organizationId: string, page = 1, pageSize = 25) {
+  const where = { organizationId };
+  const [items, total] = await prisma.$transaction([
+    prisma.returnRequest.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.returnRequest.count({ where })
+  ]);
+  return { items, total };
+}
 export async function getReturn(id: string, organizationId: string) { const item = await prisma.returnRequest.findFirst({ where: { id, organizationId } }); if (!item) throw new AppError(404, "RETURN_NOT_FOUND", "Return request not found."); return item; }
 export async function decideReturn(actorId: string, organizationId: string, requestId: string, id: string, approve: boolean, input: { checkinCondition?: AssetCondition; checkinNotes?: string; decisionNotes?: string }) {
   return prisma.$transaction(async (tx) => { const request = await tx.returnRequest.findFirst({ where: { id, organizationId } }); if (!request) throw new AppError(404, "RETURN_NOT_FOUND", "Return request not found."); if (request.status !== "PENDING") throw new AppError(409, "RETURN_ALREADY_DECIDED", "This return request was already decided.");
@@ -26,7 +40,14 @@ export async function decideReturn(actorId: string, organizationId: string, requ
     if (allocation.allocatedToUserId) await notify(tx, { organizationId, recipientUserId: allocation.allocatedToUserId, type: "RETURN_APPROVED", title: "Return approved", body: "Your asset return was approved.", entityType: "RETURN_REQUEST", entityId: id }); await logActivity(tx, { organizationId, actorUserId: actorId, requestId, action: "RETURN_APPROVED", entityType: "RETURN_REQUEST", entityId: id, summary: "Approved asset return." }); return updated;
   });
 }
-export async function listTransfers(organizationId: string) { return prisma.transferRequest.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" } }); }
+export async function listTransfers(organizationId: string, page = 1, pageSize = 25) {
+  const where = { organizationId };
+  const [items, total] = await prisma.$transaction([
+    prisma.transferRequest.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.transferRequest.count({ where })
+  ]);
+  return { items, total };
+}
 export async function getTransfer(id: string, organizationId: string) { const item = await prisma.transferRequest.findFirst({ where: { id, organizationId } }); if (!item) throw new AppError(404, "TRANSFER_NOT_FOUND", "Transfer request not found."); return item; }
 export async function createTransfer(actorId: string, organizationId: string, requestId: string, input: { sourceAllocationId: string; toUserId?: string; toDepartmentId?: string; reason: string }) { const allocation = await getAllocation(input.sourceAllocationId, organizationId); if (allocation.endedAt) throw new AppError(409, "ALLOCATION_ENDED", "The source allocation is no longer active."); const item = await prisma.transferRequest.create({ data: { organizationId, assetId: allocation.assetId, sourceAllocationId: allocation.id, requestedByUserId: actorId, toUserId: input.toUserId ?? null, toDepartmentId: input.toDepartmentId ?? null, reason: input.reason } }); await logActivity(prisma, { organizationId, actorUserId: actorId, requestId, action: "TRANSFER_REQUESTED", entityType: "TRANSFER_REQUEST", entityId: item.id, summary: "Requested an asset transfer." }); return item; }
 export async function decideTransfer(actorId: string, organizationId: string, requestId: string, id: string, decision: "APPROVED" | "REJECTED" | "CANCELLED", notes?: string) { return prisma.$transaction(async (tx) => { const request = await tx.transferRequest.findFirst({ where: { id, organizationId } }); if (!request) throw new AppError(404, "TRANSFER_NOT_FOUND", "Transfer request not found."); if (request.status !== "PENDING") throw new AppError(409, "TRANSFER_ALREADY_DECIDED", "This transfer request was already decided."); if (decision !== "APPROVED") return tx.transferRequest.update({ where: { id }, data: { status: decision, decidedByUserId: actorId, decidedAt: new Date(), decisionNotes: notes ?? null } });

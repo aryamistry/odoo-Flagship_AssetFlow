@@ -70,6 +70,9 @@ export function AllocationsPage() {
   const [returnToApprove, setReturnToApprove] = useState<ReturnRequest | null>(
     null,
   );
+  const [returnToReject, setReturnToReject] = useState<ReturnRequest | null>(
+    null,
+  );
   const query = useQuery({
     queryKey: ["allocations"],
     queryFn: () => api<Allocation[]>("/allocations").then((r) => r.data),
@@ -107,6 +110,7 @@ export function AllocationsPage() {
       client.invalidateQueries({ queryKey: ["allocations"] });
       client.invalidateQueries({ queryKey: ["assets-ref"] });
       setReturnToApprove(null);
+      setReturnToReject(null);
     },
   });
   return (
@@ -241,16 +245,7 @@ export function AllocationsPage() {
                             Review
                           </button>
                           <button
-                            onClick={() =>
-                              decideReturn.mutate({
-                                id: item.id,
-                                approve: false,
-                                body: {
-                                  decisionNotes:
-                                    "Return rejected after review.",
-                                },
-                              })
-                            }
+                            onClick={() => setReturnToReject(item)}
                           >
                             Reject
                           </button>
@@ -386,6 +381,41 @@ export function AllocationsPage() {
               Cancel
             </button>
             <button className="primary">Approve return</button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        title="Reject return"
+        open={Boolean(returnToReject)}
+        onClose={() => setReturnToReject(null)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!returnToReject) return;
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
+            decideReturn.mutate({
+              id: returnToReject.id,
+              approve: false,
+              body: {
+                decisionNotes: values.decisionNotes || "Return rejected after review.",
+              },
+            });
+          }}
+        >
+          <Field label="Rejection reason">
+            <textarea name="decisionNotes" required rows={3} placeholder="Please provide notes for rejecting this return..." />
+          </Field>
+          {decideReturn.error && (
+            <p className="form-error">{decideReturn.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setReturnToReject(null)}>
+              Cancel
+            </button>
+            <button className="primary danger">Reject return</button>
           </div>
         </form>
       </Modal>
@@ -771,6 +801,9 @@ export function MaintenancePage() {
   const auth = useAuth();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [maintenanceToReject, setMaintenanceToReject] = useState<Maintenance | null>(null);
+  const [maintenanceToAssign, setMaintenanceToAssign] = useState<Maintenance | null>(null);
+  const [maintenanceToResolve, setMaintenanceToResolve] = useState<Maintenance | null>(null);
   const query = useQuery({
     queryKey: ["maintenance"],
     queryFn: () =>
@@ -783,6 +816,9 @@ export function MaintenancePage() {
       client.invalidateQueries({ queryKey: ["maintenance"] });
       client.invalidateQueries({ queryKey: ["assets-ref"] });
       setOpen(false);
+      setMaintenanceToReject(null);
+      setMaintenanceToAssign(null);
+      setMaintenanceToResolve(null);
     },
   });
   const next = (item: Maintenance) => {
@@ -859,19 +895,58 @@ export function MaintenancePage() {
                     <p>{item.issueDescription}</p>
                     {auth.hasRole("ASSET_MANAGER") &&
                       item.status !== "RESOLVED" && (
-                        <button
-                          className="small-action"
-                          onClick={() => next(item)}
-                        >
-                          {item.status === "PENDING"
-                            ? "Approve"
-                            : item.status === "APPROVED"
-                              ? "Assign technician"
-                              : item.status === "TECHNICIAN_ASSIGNED"
-                                ? "Start work"
-                                : "Resolve"}{" "}
-                          →
-                        </button>
+                        <div className="card-actions" style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                          {item.status === "PENDING" && (
+                            <>
+                              <button
+                                className="small-action primary"
+                                onClick={() =>
+                                  command.mutate({
+                                    path: `/maintenance-requests/${item.id}/approve`,
+                                    body: { confirmBookingCancellations: true },
+                                  })
+                                }
+                              >
+                                Approve
+                              </button>
+                              <button
+                                className="small-action danger"
+                                onClick={() => setMaintenanceToReject(item)}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {item.status === "APPROVED" && (
+                            <button
+                              className="small-action"
+                              onClick={() => setMaintenanceToAssign(item)}
+                            >
+                              Assign technician
+                            </button>
+                          )}
+                          {item.status === "TECHNICIAN_ASSIGNED" && (
+                            <button
+                              className="small-action"
+                              onClick={() =>
+                                command.mutate({
+                                  path: `/maintenance-requests/${item.id}/start`,
+                                  body: {},
+                                })
+                              }
+                            >
+                              Start work
+                            </button>
+                          )}
+                          {item.status === "IN_PROGRESS" && (
+                            <button
+                              className="small-action"
+                              onClick={() => setMaintenanceToResolve(item)}
+                            >
+                              Resolve
+                            </button>
+                          )}
+                        </div>
                       )}
                   </Card>
                 ))
@@ -926,6 +1001,113 @@ export function MaintenancePage() {
               Cancel
             </button>
             <button className="primary">Raise request</button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        title="Reject maintenance request"
+        open={Boolean(maintenanceToReject)}
+        onClose={() => setMaintenanceToReject(null)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!maintenanceToReject) return;
+            const values = Object.fromEntries(new FormData(event.currentTarget));
+            command.mutate({
+              path: `/maintenance-requests/${maintenanceToReject.id}/reject`,
+              body: { reason: values.reason },
+            });
+          }}
+        >
+          <Field label="Rejection reason">
+            <textarea name="reason" required minLength={1} rows={3} placeholder="Provide a reason for rejecting this maintenance request..." />
+          </Field>
+          {command.error && (
+            <p className="form-error">{command.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setMaintenanceToReject(null)}>
+              Cancel
+            </button>
+            <button className="primary danger">Reject request</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        title="Assign technician"
+        open={Boolean(maintenanceToAssign)}
+        onClose={() => setMaintenanceToAssign(null)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!maintenanceToAssign) return;
+            const values = Object.fromEntries(new FormData(event.currentTarget));
+            command.mutate({
+              path: `/maintenance-requests/${maintenanceToAssign.id}/assign-technician`,
+              body: { technicianUserId: values.technicianUserId },
+            });
+          }}
+        >
+          <Field label="Technician">
+            <select name="technicianUserId" required>
+              <option value="">Select technician</option>
+              {refs.employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.firstName} {e.lastName}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {command.error && (
+            <p className="form-error">{command.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setMaintenanceToAssign(null)}>
+              Cancel
+            </button>
+            <button className="primary">Assign</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        title="Resolve maintenance"
+        open={Boolean(maintenanceToResolve)}
+        onClose={() => setMaintenanceToResolve(null)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!maintenanceToResolve) return;
+            const values = Object.fromEntries(new FormData(event.currentTarget));
+            command.mutate({
+              path: `/maintenance-requests/${maintenanceToResolve.id}/resolve`,
+              body: { outcome: values.outcome, notes: values.notes },
+            });
+          }}
+        >
+          <Field label="Resolution outcome">
+            <select name="outcome" required>
+              <option value="RESTORE_PREVIOUS_ALLOCATION">RESTORE_PREVIOUS_ALLOCATION</option>
+              <option value="MAKE_AVAILABLE">MAKE_AVAILABLE</option>
+              <option value="RETIRE">RETIRE</option>
+              <option value="MARK_LOST">MARK_LOST</option>
+            </select>
+          </Field>
+          <Field label="Resolution notes">
+            <textarea name="notes" required minLength={1} rows={3} placeholder="Describe the resolution..." />
+          </Field>
+          {command.error && (
+            <p className="form-error">{command.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setMaintenanceToResolve(null)}>
+              Cancel
+            </button>
+            <button className="primary">Resolve</button>
           </div>
         </form>
       </Modal>

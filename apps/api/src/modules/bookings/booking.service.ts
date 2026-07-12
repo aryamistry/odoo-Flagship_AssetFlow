@@ -1,9 +1,54 @@
 import { prisma, logActivity, notify } from "../../platform/trace/trace.service.js"; import { AppError } from "../../platform/http/errors.js";
 type BookingInput = { assetId: string; bookedForUserId?: string; bookedForDepartmentId?: string; title: string; purpose?: string; startAt: string; endAt: string };
-export async function listBookings(organizationId: string, assetId?: string) { return prisma.booking.findMany({ where: { organizationId, assetId }, orderBy: { startAt: "asc" } }); }
+export async function listBookings(organizationId: string, assetId?: string, page = 1, pageSize = 25) {
+  const where = { organizationId, assetId };
+  const [items, total] = await prisma.$transaction([
+    prisma.booking.findMany({ where, orderBy: { startAt: "asc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.booking.count({ where })
+  ]);
+  return { items, total };
+}
 export async function getBooking(id: string, organizationId: string) { const item = await prisma.booking.findFirst({ where: { id, organizationId } }); if (!item) throw new AppError(404, "BOOKING_NOT_FOUND", "Booking not found."); return item; }
 async function validateSlot(db: typeof prisma, organizationId: string, assetId: string, startAt: Date, endAt: Date, excludeId?: string) { if (startAt >= endAt) throw new AppError(422, "INVALID_BOOKING_INTERVAL", "Booking end must be after its start."); const profile = await db.resourceProfile.findFirst({ where: { assetId, organizationId } }); const asset = await db.asset.findFirst({ where: { id: assetId, organizationId } }); if (!profile || !asset?.isBookable) throw new AppError(422, "RESOURCE_NOT_BOOKABLE", "This asset is not bookable."); if (["UNDER_MAINTENANCE", "LOST", "RETIRED", "DISPOSED"].includes(asset.status)) throw new AppError(409, "RESOURCE_UNAVAILABLE", "This resource is unavailable."); const overlap = await db.booking.findFirst({ where: { assetId, id: excludeId ? { not: excludeId } : undefined, status: { in: ["PENDING", "CONFIRMED"] }, effectiveStartAt: { lt: endAt }, effectiveEndAt: { gt: startAt } } }); if (overlap) throw new AppError(409, "BOOKING_OVERLAP", "The requested slot overlaps an active booking."); return profile; }
 export async function createBooking(actorId: string, organizationId: string, requestId: string, input: BookingInput) { const startAt = new Date(input.startAt), endAt = new Date(input.endAt); const profile = await validateSlot(prisma, organizationId, input.assetId, startAt, endAt); const item = await prisma.booking.create({ data: { organizationId, assetId: input.assetId, requestedByUserId: actorId, bookedForUserId: input.bookedForUserId ?? actorId, bookedForDepartmentId: input.bookedForDepartmentId ?? null, title: input.title, purpose: input.purpose ?? null, startAt, endAt, effectiveStartAt: new Date(startAt.getTime() - profile.bufferBeforeMinutes * 60_000), effectiveEndAt: new Date(endAt.getTime() + profile.bufferAfterMinutes * 60_000), status: profile.requiresApproval ? "PENDING" : "CONFIRMED" } }); await notify(prisma, { organizationId, recipientUserId: input.bookedForUserId ?? actorId, type: "BOOKING_CONFIRMED", title: "Booking created", body: `${input.title} was ${item.status.toLowerCase()}.`, entityType: "BOOKING", entityId: item.id }); await logActivity(prisma, { organizationId, actorUserId: actorId, requestId, action: "BOOKING_CREATED", entityType: "BOOKING", entityId: item.id, summary: `Created booking ${item.title}.` }); return item; }
 export async function cancelBooking(actorId: string, organizationId: string, requestId: string, id: string, reason?: string) { const item = await getBooking(id, organizationId); if (!["PENDING", "CONFIRMED"].includes(item.status) || item.startAt <= new Date()) throw new AppError(409, "BOOKING_NOT_CANCELLABLE", "Only future active bookings can be cancelled."); const updated = await prisma.booking.update({ where: { id }, data: { status: "CANCELLED", cancelledByUserId: actorId, cancelledAt: new Date(), cancellationReason: reason ?? null } }); await notify(prisma, { organizationId, recipientUserId: item.bookedForUserId ?? item.requestedByUserId, type: "BOOKING_CANCELLED", title: "Booking cancelled", body: `${item.title} was cancelled.`, entityType: "BOOKING", entityId: id }); await logActivity(prisma, { organizationId, actorUserId: actorId, requestId, action: "BOOKING_CANCELLED", entityType: "BOOKING", entityId: id, summary: `Cancelled booking ${item.title}.` }); return updated; }
 export async function reschedule(actorId: string, organizationId: string, requestId: string, id: string, input: { startAt: string; endAt: string; reason?: string }) { const original = await getBooking(id, organizationId); if (!["PENDING", "CONFIRMED"].includes(original.status) || original.startAt <= new Date()) throw new AppError(409, "BOOKING_NOT_RESCHEDULABLE", "Only future active bookings can be rescheduled."); const startAt = new Date(input.startAt), endAt = new Date(input.endAt); const profile = await validateSlot(prisma, organizationId, original.assetId, startAt, endAt, original.id); return prisma.$transaction(async (tx) => { await tx.booking.update({ where: { id }, data: { status: "CANCELLED", cancelledByUserId: actorId, cancelledAt: new Date(), cancellationReason: input.reason ?? "Rescheduled" } }); const replacement = await tx.booking.create({ data: { organizationId, assetId: original.assetId, requestedByUserId: actorId, bookedForUserId: original.bookedForUserId, bookedForDepartmentId: original.bookedForDepartmentId, title: original.title, purpose: original.purpose, startAt, endAt, effectiveStartAt: new Date(startAt.getTime() - profile.bufferBeforeMinutes * 60_000), effectiveEndAt: new Date(endAt.getTime() + profile.bufferAfterMinutes * 60_000), status: original.status, rescheduledFromBookingId: original.id } }); await logActivity(tx, { organizationId, actorUserId: actorId, requestId, action: "BOOKING_RESCHEDULED", entityType: "BOOKING", entityId: replacement.id, summary: `Rescheduled booking ${original.title}.` }); return replacement; }); }
-
+export async function runBookingReminders(organizationId?: string) {
+  const now = new Date();
+  const targetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const bookings = await prisma.booking.findMany({
+    where: {
+      organizationId,
+      status: "CONFIRMED",
+      startAt: { gte: now, lte: targetTime },
+    },
+  });
+  let sent = 0;
+  for (const booking of bookings) {
+    const dedupKey = `booking-reminder-${booking.id}`;
+    try {
+      const alreadyNotified = await prisma.notification.findFirst({
+        where: {
+          recipientUserId: booking.bookedForUserId ?? booking.requestedByUserId,
+          dedupKey,
+        },
+      });
+      if (!alreadyNotified) {
+        await notify(prisma, {
+          organizationId: booking.organizationId,
+          recipientUserId: booking.bookedForUserId ?? booking.requestedByUserId,
+          type: "BOOKING_REMINDER",
+          title: "Upcoming Resource Booking",
+          body: `Reminder: You have an upcoming booking '${booking.title}' starting soon.`,
+          entityType: "BOOKING",
+          entityId: booking.id,
+          dedupKey,
+        });
+        sent++;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return { remindersSent: sent };
+}

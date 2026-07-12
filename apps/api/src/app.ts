@@ -23,10 +23,21 @@ export function createApp() {
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
-  app.use((req, _res, next) => {
+  app.use((req, res, next) => {
+    let csrfToken = req.cookies["csrf-token"];
+    if (!csrfToken) {
+      csrfToken = crypto.randomUUID();
+      res.cookie("csrf-token", csrfToken, {
+        sameSite: "lax",
+        secure: env.NODE_ENV === "production",
+        httpOnly: false,
+      });
+    }
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
     const origin = req.header("origin");
     if (origin && origin !== env.WEB_ORIGIN) return next(new AppError(403, "INVALID_ORIGIN", "The request origin is not allowed."));
+    const csrfHeader = req.headers["x-csrf-token"];
+    if (!csrfHeader || csrfHeader !== csrfToken) return next(new AppError(403, "INVALID_CSRF_TOKEN", "CSRF token validation failed."));
     next();
   });
   app.use((req, res, next) => {
