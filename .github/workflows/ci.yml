@@ -1,0 +1,30 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_DB: assetflow
+          POSTGRES_USER: assetflow
+          POSTGRES_PASSWORD: assetflow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U assetflow" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://assetflow:assetflow@localhost:5432/assetflow?schema=public
+      SESSION_PEPPER: ci-only-pepper-at-least-32-bytes
+      WEB_ORIGIN: http://localhost:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.10.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24.18.0, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check

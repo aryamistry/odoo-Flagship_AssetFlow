@@ -1,0 +1,24 @@
+{
+  "name": "assetflow",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:integration": "pnpm --filter @assetflow/api test:integration",
+    "test:e2e": "pnpm --filter @assetflow/web test:e2e",
+    "db:migrate": "pnpm --filter @assetflow/api db:migrate",
+    "db:seed": "pnpm --filter @assetflow/api db:seed",
+    "db:studio": "pnpm --filter @assetflow/api db:studio",
+    "format": "pnpm -r format",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}
