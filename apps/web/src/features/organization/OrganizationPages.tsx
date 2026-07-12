@@ -463,9 +463,10 @@ type Employee = {
 export function EmployeesPage() {
   const client = useQueryClient();
   const [selected, setSelected] = useState<Employee | null>(null);
-  const selectedRole = selected?.roles?.length
-    ? selected.roles[selected.roles.length - 1]?.role ?? null
-    : null;
+  const selectedRole =
+    selected?.roles && selected.roles.length > 0
+      ? selected.roles[selected.roles.length - 1]!.role
+      : null;
   const query = useQuery({
     queryKey: ["employees"],
     queryFn: () =>

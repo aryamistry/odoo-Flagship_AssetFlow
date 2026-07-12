@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, displayDate, post } from "../../lib/api";
+import { AttachmentPanel } from "../../components/AttachmentPanel";
 import {
   Badge,
   Card,
@@ -616,6 +617,7 @@ export function BookingsPage() {
   const refs = useReferenceData();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [rebookBooking, setRebookBooking] = useState<Booking | null>(null);
   const query = useQuery({
     queryKey: ["bookings"],
     queryFn: () => api<Booking[]>("/bookings").then((r) => r.data),
@@ -626,6 +628,7 @@ export function BookingsPage() {
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["bookings"] });
       setOpen(false);
+      setRebookBooking(null);
     },
   });
   return (
@@ -681,25 +684,7 @@ export function BookingsPage() {
                     new Date(booking.startAt) > new Date() && (
                       <div className="actions">
                         <button
-                          onClick={() => {
-                            const startAt = window.prompt(
-                              "New start time (ISO 8601)",
-                              booking.startAt,
-                            );
-                            const endAt = window.prompt(
-                              "New end time (ISO 8601)",
-                              booking.endAt,
-                            );
-                            if (startAt && endAt)
-                              command.mutate({
-                                path: `/bookings/${booking.id}/reschedule`,
-                                body: {
-                                  startAt: new Date(startAt).toISOString(),
-                                  endAt: new Date(endAt).toISOString(),
-                                  reason: "Cancel and rebook",
-                                },
-                              });
-                          }}
+                          onClick={() => setRebookBooking(booking)}
                         >
                           Cancel &amp; rebook
                         </button>
@@ -787,6 +772,55 @@ export function BookingsPage() {
           </div>
         </form>
       </Modal>
+
+      <Modal title="Reschedule booking" open={Boolean(rebookBooking)} onClose={() => setRebookBooking(null)}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!rebookBooking) return;
+            const values = Object.fromEntries(new FormData(event.currentTarget));
+            command.mutate({
+              path: `/bookings/${rebookBooking.id}/reschedule`,
+              body: {
+                startAt: new Date(String(values.startAt)).toISOString(),
+                endAt: new Date(String(values.endAt)).toISOString(),
+                reason: values.reason,
+              },
+            });
+          }}
+        >
+          <div className="form-grid">
+            <Field label="New start time">
+              <input
+                name="startAt"
+                type="datetime-local"
+                required
+                defaultValue={rebookBooking ? new Date(rebookBooking.startAt).toISOString().slice(0, 16) : ""}
+              />
+            </Field>
+            <Field label="New end time">
+              <input
+                name="endAt"
+                type="datetime-local"
+                required
+                defaultValue={rebookBooking ? new Date(rebookBooking.endAt).toISOString().slice(0, 16) : ""}
+              />
+            </Field>
+          </div>
+          <Field label="Reason for rescheduling">
+            <textarea name="reason" required placeholder="Provide a reason..." />
+          </Field>
+          {command.error && (
+            <p className="form-error">{command.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setRebookBooking(null)}>
+              Cancel
+            </button>
+            <button className="primary">Reschedule</button>
+          </div>
+        </form>
+      </Modal>
     </Page>
   );
 }
@@ -814,6 +848,7 @@ export function MaintenancePage() {
   const [maintenanceToReject, setMaintenanceToReject] = useState<Maintenance | null>(null);
   const [maintenanceToAssign, setMaintenanceToAssign] = useState<Maintenance | null>(null);
   const [maintenanceToResolve, setMaintenanceToResolve] = useState<Maintenance | null>(null);
+  const [maintenanceForEvidence, setMaintenanceForEvidence] = useState<Maintenance | null>(null);
   const query = useQuery({
     queryKey: ["maintenance"],
     queryFn: () =>
@@ -958,7 +993,7 @@ export function MaintenancePage() {
                               ▶ Start work
                             </button>
                           )}
-                          {item.status === "IN_PROGRESS" && (
+                        {item.status === "IN_PROGRESS" && (
                             <button
                               className="small-action good"
                               onClick={() => setMaintenanceToResolve(item)}
@@ -966,6 +1001,12 @@ export function MaintenancePage() {
                               ✓ Resolve
                             </button>
                           )}
+                          <button
+                            className="small-action"
+                            onClick={() => setMaintenanceForEvidence(item)}
+                          >
+                            📎 Evidence
+                          </button>
                         </div>
                       )}
                   </Card>
@@ -1130,6 +1171,23 @@ export function MaintenancePage() {
             <button className="primary">Resolve</button>
           </div>
         </form>
+      </Modal>
+      <Modal
+        title="Maintenance evidence"
+        open={Boolean(maintenanceForEvidence)}
+        onClose={() => setMaintenanceForEvidence(null)}
+      >
+        {maintenanceForEvidence && (
+          <AttachmentPanel
+            endpoint={`/maintenance-requests/${maintenanceForEvidence.id}/attachments`}
+            queryKey={["maintenance-attachments", maintenanceForEvidence.id]}
+            deleteEndpoint={(fileId) =>
+              `/maintenance-requests/${maintenanceForEvidence.id}/attachments/${fileId}`
+            }
+            canModify
+            title="Evidence files"
+          />
+        )}
       </Modal>
     </Page>
   );
