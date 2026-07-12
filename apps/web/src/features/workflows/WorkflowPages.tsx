@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, displayDate, post } from "../../lib/api";
-import { AttachmentPanel } from "../../components/AttachmentPanel";
 import {
   Badge,
   Card,
@@ -245,9 +244,7 @@ export function AllocationsPage() {
                           <button onClick={() => setReturnToApprove(item)}>
                             Review
                           </button>
-                          <button
-                            onClick={() => setReturnToReject(item)}
-                          >
+                          <button onClick={() => setReturnToReject(item)}>
                             Reject
                           </button>
                         </td>
@@ -401,13 +398,19 @@ export function AllocationsPage() {
               id: returnToReject.id,
               approve: false,
               body: {
-                decisionNotes: values.decisionNotes || "Return rejected after review.",
+                decisionNotes:
+                  values.decisionNotes || "Return rejected after review.",
               },
             });
           }}
         >
           <Field label="Rejection reason">
-            <textarea name="decisionNotes" required rows={3} placeholder="Please provide notes for rejecting this return..." />
+            <textarea
+              name="decisionNotes"
+              required
+              rows={3}
+              placeholder="Please provide notes for rejecting this return..."
+            />
           </Field>
           {decideReturn.error && (
             <p className="form-error">{decideReturn.error.message}</p>
@@ -683,9 +686,7 @@ export function BookingsPage() {
                   {["PENDING", "CONFIRMED"].includes(booking.status) &&
                     new Date(booking.startAt) > new Date() && (
                       <div className="actions">
-                        <button
-                          onClick={() => setRebookBooking(booking)}
-                        >
+                        <button onClick={() => setRebookBooking(booking)}>
                           Cancel &amp; rebook
                         </button>
                         <button
@@ -773,12 +774,18 @@ export function BookingsPage() {
         </form>
       </Modal>
 
-      <Modal title="Reschedule booking" open={Boolean(rebookBooking)} onClose={() => setRebookBooking(null)}>
+      <Modal
+        title="Reschedule booking"
+        open={Boolean(rebookBooking)}
+        onClose={() => setRebookBooking(null)}
+      >
         <form
           onSubmit={(event) => {
             event.preventDefault();
             if (!rebookBooking) return;
-            const values = Object.fromEntries(new FormData(event.currentTarget));
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
             command.mutate({
               path: `/bookings/${rebookBooking.id}/reschedule`,
               body: {
@@ -795,7 +802,11 @@ export function BookingsPage() {
                 name="startAt"
                 type="datetime-local"
                 required
-                defaultValue={rebookBooking ? new Date(rebookBooking.startAt).toISOString().slice(0, 16) : ""}
+                defaultValue={
+                  rebookBooking
+                    ? new Date(rebookBooking.startAt).toISOString().slice(0, 16)
+                    : ""
+                }
               />
             </Field>
             <Field label="New end time">
@@ -803,12 +814,20 @@ export function BookingsPage() {
                 name="endAt"
                 type="datetime-local"
                 required
-                defaultValue={rebookBooking ? new Date(rebookBooking.endAt).toISOString().slice(0, 16) : ""}
+                defaultValue={
+                  rebookBooking
+                    ? new Date(rebookBooking.endAt).toISOString().slice(0, 16)
+                    : ""
+                }
               />
             </Field>
           </div>
           <Field label="Reason for rescheduling">
-            <textarea name="reason" required placeholder="Provide a reason..." />
+            <textarea
+              name="reason"
+              required
+              placeholder="Provide a reason..."
+            />
           </Field>
           {command.error && (
             <p className="form-error">{command.error.message}</p>
@@ -845,10 +864,12 @@ export function MaintenancePage() {
   const auth = useAuth();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [maintenanceToReject, setMaintenanceToReject] = useState<Maintenance | null>(null);
-  const [maintenanceToAssign, setMaintenanceToAssign] = useState<Maintenance | null>(null);
-  const [maintenanceToResolve, setMaintenanceToResolve] = useState<Maintenance | null>(null);
-  const [maintenanceForEvidence, setMaintenanceForEvidence] = useState<Maintenance | null>(null);
+  const [maintenanceToReject, setMaintenanceToReject] =
+    useState<Maintenance | null>(null);
+  const [maintenanceToAssign, setMaintenanceToAssign] =
+    useState<Maintenance | null>(null);
+  const [maintenanceToResolve, setMaintenanceToResolve] =
+    useState<Maintenance | null>(null);
   const query = useQuery({
     queryKey: ["maintenance"],
     queryFn: () =>
@@ -933,7 +954,9 @@ export function MaintenancePage() {
                       >
                         {item.priority}
                       </Badge>
-                      <small className="mcard-date">{displayDate(item.createdAt)}</small>
+                      <small className="mcard-date">
+                        {displayDate(item.createdAt)}
+                      </small>
                     </div>
                     <h3 className="mcard-asset">
                       {refs.assets.find((a) => a.id === item.assetId)?.name ??
@@ -993,7 +1016,7 @@ export function MaintenancePage() {
                               ▶ Start work
                             </button>
                           )}
-                        {item.status === "IN_PROGRESS" && (
+                          {item.status === "IN_PROGRESS" && (
                             <button
                               className="small-action good"
                               onClick={() => setMaintenanceToResolve(item)}
@@ -1001,12 +1024,6 @@ export function MaintenancePage() {
                               ✓ Resolve
                             </button>
                           )}
-                          <button
-                            className="small-action"
-                            onClick={() => setMaintenanceForEvidence(item)}
-                          >
-                            📎 Evidence
-                          </button>
                         </div>
                       )}
                   </Card>
@@ -1074,7 +1091,9 @@ export function MaintenancePage() {
           onSubmit={(event) => {
             event.preventDefault();
             if (!maintenanceToReject) return;
-            const values = Object.fromEntries(new FormData(event.currentTarget));
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
             command.mutate({
               path: `/maintenance-requests/${maintenanceToReject.id}/reject`,
               body: { reason: values.reason },
@@ -1082,7 +1101,13 @@ export function MaintenancePage() {
           }}
         >
           <Field label="Rejection reason">
-            <textarea name="reason" required minLength={1} rows={3} placeholder="Provide a reason for rejecting this maintenance request..." />
+            <textarea
+              name="reason"
+              required
+              minLength={1}
+              rows={3}
+              placeholder="Provide a reason for rejecting this maintenance request..."
+            />
           </Field>
           {command.error && (
             <p className="form-error">{command.error.message}</p>
@@ -1105,7 +1130,9 @@ export function MaintenancePage() {
           onSubmit={(event) => {
             event.preventDefault();
             if (!maintenanceToAssign) return;
-            const values = Object.fromEntries(new FormData(event.currentTarget));
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
             command.mutate({
               path: `/maintenance-requests/${maintenanceToAssign.id}/assign-technician`,
               body: { technicianUserId: values.technicianUserId },
@@ -1143,7 +1170,9 @@ export function MaintenancePage() {
           onSubmit={(event) => {
             event.preventDefault();
             if (!maintenanceToResolve) return;
-            const values = Object.fromEntries(new FormData(event.currentTarget));
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
             command.mutate({
               path: `/maintenance-requests/${maintenanceToResolve.id}/resolve`,
               body: { outcome: values.outcome, notes: values.notes },
@@ -1152,14 +1181,22 @@ export function MaintenancePage() {
         >
           <Field label="Resolution outcome">
             <select name="outcome" required>
-              <option value="RESTORE_PREVIOUS_ALLOCATION">RESTORE_PREVIOUS_ALLOCATION</option>
+              <option value="RESTORE_PREVIOUS_ALLOCATION">
+                RESTORE_PREVIOUS_ALLOCATION
+              </option>
               <option value="MAKE_AVAILABLE">MAKE_AVAILABLE</option>
               <option value="RETIRE">RETIRE</option>
               <option value="MARK_LOST">MARK_LOST</option>
             </select>
           </Field>
           <Field label="Resolution notes">
-            <textarea name="notes" required minLength={1} rows={3} placeholder="Describe the resolution..." />
+            <textarea
+              name="notes"
+              required
+              minLength={1}
+              rows={3}
+              placeholder="Describe the resolution..."
+            />
           </Field>
           {command.error && (
             <p className="form-error">{command.error.message}</p>
@@ -1171,23 +1208,6 @@ export function MaintenancePage() {
             <button className="primary">Resolve</button>
           </div>
         </form>
-      </Modal>
-      <Modal
-        title="Maintenance evidence"
-        open={Boolean(maintenanceForEvidence)}
-        onClose={() => setMaintenanceForEvidence(null)}
-      >
-        {maintenanceForEvidence && (
-          <AttachmentPanel
-            endpoint={`/maintenance-requests/${maintenanceForEvidence.id}/attachments`}
-            queryKey={["maintenance-attachments", maintenanceForEvidence.id]}
-            deleteEndpoint={(fileId) =>
-              `/maintenance-requests/${maintenanceForEvidence.id}/attachments/${fileId}`
-            }
-            canModify
-            title="Evidence files"
-          />
-        )}
       </Modal>
     </Page>
   );
