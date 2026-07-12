@@ -85,6 +85,13 @@ enum BookingStatus {
   CANCELLED
   COMPLETED
 }
+enum WaitlistStatus {
+  PENDING
+  OFFERED
+  FULFILLED
+  CANCELLED
+  EXPIRED
+}
 enum MaintenancePriority {
   LOW
   MEDIUM
@@ -329,6 +336,9 @@ model ResourceProfile {
   advanceBookingDays Int? @map("advance_booking_days")
   requiresApproval Boolean @default(false) @map("requires_approval")
   allowDepartmentBooking Boolean @default(true) @map("allow_department_booking")
+  capacity Int @default(1)
+  availabilityJson Json? @map("availability_json")
+  allowRecurring Boolean @default(false) @map("allow_recurring")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
   @@map("resource_profiles")
@@ -406,15 +416,46 @@ model Booking {
   effectiveStartAt DateTime @map("effective_start_at") @db.Timestamptz
   effectiveEndAt DateTime @map("effective_end_at") @db.Timestamptz
   status BookingStatus
+  participantCount Int @default(1) @map("participant_count")
+  approvedByUserId String? @map("approved_by_user_id") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+  rejectedByUserId String? @map("rejected_by_user_id") @db.Uuid
+  rejectedAt DateTime? @map("rejected_at") @db.Timestamptz
+  rejectionReason String? @map("rejection_reason")
   cancelledByUserId String? @map("cancelled_by_user_id") @db.Uuid
   cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz
   cancellationReason String? @map("cancellation_reason")
   completedAt DateTime? @map("completed_at") @db.Timestamptz
   rescheduledFromBookingId String? @unique @map("rescheduled_from_booking_id") @db.Uuid
+  recurrenceGroupId String? @map("recurrence_group_id") @db.Uuid
+  recurrenceRule String? @map("recurrence_rule")
+  occurrenceNumber Int? @map("occurrence_number")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
   @@index([assetId, startAt])
+  @@index([recurrenceGroupId])
   @@map("bookings")
+}
+
+model BookingWaitlistEntry {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  requestedByUserId String @map("requested_by_user_id") @db.Uuid
+  bookedForUserId String? @map("booked_for_user_id") @db.Uuid
+  bookedForDepartmentId String? @map("booked_for_department_id") @db.Uuid
+  title String
+  purpose String?
+  desiredStartAt DateTime @map("desired_start_at") @db.Timestamptz
+  desiredEndAt DateTime @map("desired_end_at") @db.Timestamptz
+  participantCount Int @default(1) @map("participant_count")
+  status WaitlistStatus @default(PENDING)
+  offeredAt DateTime? @map("offered_at") @db.Timestamptz
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@index([assetId, status, desiredStartAt])
+  @@map("booking_waitlist_entries")
 }
 
 model MaintenanceRequest {
@@ -549,6 +590,32 @@ model Notification {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   @@index([recipientUserId, readAt, createdAt])
   @@map("notifications")
+}
+
+model NotificationPreference {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  type String
+  isEnabled Boolean @default(true) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([userId, type])
+  @@map("notification_preferences")
+}
+
+model JobRun {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+  jobName String @map("job_name")
+  idempotencyKey String @unique @map("idempotency_key")
+  status String
+  resultJson Json? @map("result_json")
+  errorText String? @map("error_text")
+  startedAt DateTime @default(now()) @map("started_at") @db.Timestamptz
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz
+  @@index([jobName, startedAt])
+  @@map("job_runs")
 }
 
 model ActivityLog {
