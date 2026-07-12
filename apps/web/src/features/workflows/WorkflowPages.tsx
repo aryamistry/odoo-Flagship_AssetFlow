@@ -757,10 +757,20 @@ export function BookingsPage() {
           </Field>
           <div className="form-grid">
             <Field label="Starts">
-              <input name="startAt" type="datetime-local" required />
+              <input
+                name="startAt"
+                type="datetime-local"
+                required
+                min={new Date().toISOString().slice(0, 16)}
+              />
             </Field>
             <Field label="Ends">
-              <input name="endAt" type="datetime-local" required />
+              <input
+                name="endAt"
+                type="datetime-local"
+                required
+                min={new Date().toISOString().slice(0, 16)}
+              />
             </Field>
           </div>
           <Field label="Purpose">
@@ -875,27 +885,37 @@ export function MaintenancePage() {
                 ?.filter((item) => item.status === column)
                 .map((item) => (
                   <Card key={item.id} className="maintenance-card">
-                    <div className="card-top">
+                    <div className="mcard-header">
                       <Badge
                         tone={
                           item.priority === "CRITICAL" ||
                           item.priority === "HIGH"
                             ? "bad"
-                            : "warn"
+                            : item.priority === "MEDIUM"
+                              ? "warn"
+                              : "neutral"
                         }
                       >
                         {item.priority}
                       </Badge>
-                      <small>{displayDate(item.createdAt)}</small>
+                      <small className="mcard-date">{displayDate(item.createdAt)}</small>
                     </div>
-                    <h3>
+                    <h3 className="mcard-asset">
                       {refs.assets.find((a) => a.id === item.assetId)?.name ??
                         "Asset"}
                     </h3>
-                    <p>{item.issueDescription}</p>
+                    <p className="mcard-desc">{item.issueDescription}</p>
+                    {item.assignedTechnicianUserId && (
+                      <p className="mcard-tech">
+                        🔧{" "}
+                        {refs.employees.find(
+                          (e) => e.id === item.assignedTechnicianUserId,
+                        )?.firstName ?? "Technician assigned"}
+                      </p>
+                    )}
                     {auth.hasRole("ASSET_MANAGER") &&
                       item.status !== "RESOLVED" && (
-                        <div className="card-actions" style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+                        <div className="mcard-actions">
                           {item.status === "PENDING" && (
                             <>
                               <button
@@ -907,13 +927,13 @@ export function MaintenancePage() {
                                   })
                                 }
                               >
-                                Approve
+                                ✓ Approve
                               </button>
                               <button
                                 className="small-action danger"
                                 onClick={() => setMaintenanceToReject(item)}
                               >
-                                Reject
+                                ✕ Reject
                               </button>
                             </>
                           )}
@@ -922,7 +942,7 @@ export function MaintenancePage() {
                               className="small-action"
                               onClick={() => setMaintenanceToAssign(item)}
                             >
-                              Assign technician
+                              👤 Assign technician
                             </button>
                           )}
                           {item.status === "TECHNICIAN_ASSIGNED" && (
@@ -935,15 +955,15 @@ export function MaintenancePage() {
                                 })
                               }
                             >
-                              Start work
+                              ▶ Start work
                             </button>
                           )}
                           {item.status === "IN_PROGRESS" && (
                             <button
-                              className="small-action"
+                              className="small-action good"
                               onClick={() => setMaintenanceToResolve(item)}
                             >
-                              Resolve
+                              ✓ Resolve
                             </button>
                           )}
                         </div>
