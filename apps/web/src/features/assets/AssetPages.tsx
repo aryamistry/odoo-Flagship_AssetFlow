@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api, displayDate, post } from "../../lib/api";
+import { api, displayDate, patch, post } from "../../lib/api";
 import {
   Badge,
   Card,
@@ -12,6 +12,7 @@ import {
   ErrorState,
   Field,
   Loading,
+  Modal,
   Page,
   statusTone,
 } from "../../components/ui";
@@ -26,6 +27,10 @@ type Asset = {
   currentLocationId: string | null;
   owningDepartmentId: string | null;
   serialNumber: string | null;
+  qrCode?: string | null;
+  description?: string | null;
+  attachmentUrl?: string | null;
+  expectedRetirementOn?: string | null;
   isBookable: boolean;
   version: number;
   createdAt: string;
@@ -39,6 +44,7 @@ type Asset = {
   } | null;
   nextBookings?: unknown[];
   maintenance?: unknown;
+  fields?: Array<{ fieldDefinitionId: string; valueJson: unknown }>;
 };
 type Master = { id: string; name: string; code: string };
 type CategoryField = {
@@ -55,6 +61,18 @@ type CategoryField = {
 export function AssetsPage() {
   const auth = useAuth();
   const [params, setParams] = useSearchParams();
+  const categories = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => api<Master[]>("/categories").then((r) => r.data),
+  });
+  const departments = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => api<Master[]>("/departments").then((r) => r.data),
+  });
+  const locations = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => api<Master[]>("/locations").then((r) => r.data),
+  });
   const query = useQuery({
     queryKey: ["assets", params.toString()],
     queryFn: () => api<Asset[]>(`/assets?${params}`).then((r) => r),
@@ -107,6 +125,30 @@ export function AssetsPage() {
               <option key={value}>{value}</option>
             ))}
           </select>
+          <FilterSelect
+            label="Asset category"
+            value={params.get("categoryId") ?? ""}
+            options={categories.data ?? []}
+            onChange={(value) =>
+              setFilter(params, setParams, "categoryId", value)
+            }
+          />
+          <FilterSelect
+            label="Owning department"
+            value={params.get("departmentId") ?? ""}
+            options={departments.data ?? []}
+            onChange={(value) =>
+              setFilter(params, setParams, "departmentId", value)
+            }
+          />
+          <FilterSelect
+            label="Asset location"
+            value={params.get("locationId") ?? ""}
+            options={locations.data ?? []}
+            onChange={(value) =>
+              setFilter(params, setParams, "locationId", value)
+            }
+          />
         </div>
         {query.isLoading ? (
           <Loading />
@@ -149,6 +191,42 @@ export function AssetsPage() {
         )}
       </Card>
     </Page>
+  );
+}
+function setFilter(
+  params: URLSearchParams,
+  setParams: (value: URLSearchParams) => void,
+  key: string,
+  value: string,
+) {
+  const next = new URLSearchParams(params);
+  value ? next.set(key, value) : next.delete(key);
+  setParams(next);
+}
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Master[];
+  onChange(value: string): void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">All {label.toLowerCase()}s</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
+        </option>
+      ))}
+    </select>
   );
 }
 const assetSchema = z.object({
@@ -434,6 +512,9 @@ function DynamicCategoryField({
 }
 export function AssetDetailPage() {
   const { id } = useParams();
+  const auth = useAuth();
+  const client = useQueryClient();
+  const [editing, setEditing] = useState(false);
   const query = useQuery({
     queryKey: ["asset", id],
     queryFn: () => api<Asset>(`/assets/${id}`).then((r) => r.data),
@@ -447,6 +528,22 @@ export function AssetDetailPage() {
       ).then((r) => r.data),
     enabled: Boolean(id),
   });
+  const definitions = useQuery({
+    queryKey: ["category-fields", query.data?.categoryId],
+    queryFn: () =>
+      api<CategoryField[]>(`/categories/${query.data!.categoryId}/fields`).then(
+        (r) => r.data,
+      ),
+    enabled: Boolean(query.data?.categoryId),
+  });
+  const update = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      patch<Asset>(`/assets/${id}`, body),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["asset", id] });
+      setEditing(false);
+    },
+  });
   if (query.isLoading) return <Loading />;
   if (query.error || !query.data) return <ErrorState error={query.error} />;
   const asset = query.data;
@@ -455,9 +552,14 @@ export function AssetDetailPage() {
       title={`${asset.assetTag} · ${asset.name}`}
       description="Complete operational context and immutable workflow history."
       action={
-        <Badge tone={statusTone(asset.status)}>
-          {asset.status.replaceAll("_", " ")}
-        </Badge>
+        <div className="actions">
+          {auth.hasRole("ASSET_MANAGER") && (
+            <button onClick={() => setEditing(true)}>Edit metadata</button>
+          )}
+          <Badge tone={statusTone(asset.status)}>
+            {asset.status.replaceAll("_", " ")}
+          </Badge>
+        </div>
       }
     >
       <div className="detail-grid">
@@ -470,6 +572,8 @@ export function AssetDetailPage() {
             <dd>{asset.condition}</dd>
             <dt>Serial</dt>
             <dd>{asset.serialNumber ?? "—"}</dd>
+            <dt>QR code</dt>
+            <dd>{asset.qrCode ?? "—"}</dd>
             <dt>Department</dt>
             <dd>{asset.department?.name ?? "—"}</dd>
             <dt>Location</dt>
@@ -477,6 +581,27 @@ export function AssetDetailPage() {
             <dt>Bookable</dt>
             <dd>{asset.isBookable ? "Yes" : "No"}</dd>
           </dl>
+          {asset.fields?.length ? (
+            <div className="custom-values">
+              {asset.fields.map((value) => {
+                const definition = definitions.data?.find(
+                  (field) => field.id === value.fieldDefinitionId,
+                );
+                return (
+                  <div key={value.fieldDefinitionId}>
+                    <span>
+                      {definition?.label ?? value.fieldDefinitionId.slice(0, 8)}
+                    </span>
+                    <strong>
+                      {Array.isArray(value.valueJson)
+                        ? value.valueJson.join(", ")
+                        : String(value.valueJson)}
+                    </strong>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </Card>
         <Card>
           <h2>Current context</h2>
@@ -514,6 +639,71 @@ export function AssetDetailPage() {
           </div>
         )}
       </Card>
+      <Modal
+        title="Edit asset metadata"
+        open={editing}
+        onClose={() => setEditing(false)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
+            update.mutate({
+              name: values.name,
+              description: values.description || null,
+              serialNumber: values.serialNumber || null,
+              qrCode: values.qrCode || null,
+              attachmentUrl: values.attachmentUrl || null,
+              expectedRetirementOn: values.expectedRetirementOn || null,
+              version: asset.version,
+            });
+          }}
+        >
+          <Field label="Asset name">
+            <input name="name" defaultValue={asset.name} required />
+          </Field>
+          <Field label="Description">
+            <textarea
+              name="description"
+              defaultValue={asset.description ?? ""}
+            />
+          </Field>
+          <div className="form-grid">
+            <Field label="Serial number">
+              <input
+                name="serialNumber"
+                defaultValue={asset.serialNumber ?? ""}
+              />
+            </Field>
+            <Field label="QR code">
+              <input name="qrCode" defaultValue={asset.qrCode ?? ""} />
+            </Field>
+            <Field label="Expected retirement">
+              <input
+                type="date"
+                name="expectedRetirementOn"
+                defaultValue={asset.expectedRetirementOn?.slice(0, 10) ?? ""}
+              />
+            </Field>
+            <Field label="Attachment URL">
+              <input
+                type="url"
+                name="attachmentUrl"
+                defaultValue={asset.attachmentUrl ?? ""}
+              />
+            </Field>
+          </div>
+          {update.error && <p className="form-error">{update.error.message}</p>}
+          <div className="form-actions">
+            <button type="button" onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+            <button className="primary">Save metadata</button>
+          </div>
+        </form>
+      </Modal>
     </Page>
   );
 }
