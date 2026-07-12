@@ -27,4 +27,5 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24.18.0, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @assetflow/api db:generate
       - run: pnpm check
