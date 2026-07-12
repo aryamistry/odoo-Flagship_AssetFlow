@@ -33,6 +33,14 @@ type Allocation = {
   endedAt: string | null;
   checkoutCondition: string;
 };
+type ReturnRequest = {
+  id: string;
+  allocationId: string;
+  status: string;
+  proposedCondition: string | null;
+  requestNotes: string | null;
+  createdAt: string;
+};
 function useReferenceData() {
   const assets = useQuery({
     queryKey: ["assets-ref"],
@@ -59,6 +67,9 @@ export function AllocationsPage() {
   const refs = useReferenceData();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [returnToApprove, setReturnToApprove] = useState<ReturnRequest | null>(
+    null,
+  );
   const query = useQuery({
     queryKey: ["allocations"],
     queryFn: () => api<Allocation[]>("/allocations").then((r) => r.data),
@@ -74,6 +85,29 @@ export function AllocationsPage() {
   const requestReturn = useMutation({
     mutationFn: (id: string) => post(`/allocations/${id}/request-return`, {}),
     onSuccess: () => client.invalidateQueries({ queryKey: ["allocations"] }),
+  });
+  const returns = useQuery({
+    queryKey: ["return-requests"],
+    queryFn: () => api<ReturnRequest[]>("/return-requests").then((r) => r.data),
+    enabled: auth.hasRole("ASSET_MANAGER"),
+  });
+  const decideReturn = useMutation({
+    mutationFn: ({
+      id,
+      approve,
+      body,
+    }: {
+      id: string;
+      approve: boolean;
+      body: unknown;
+    }) =>
+      post(`/return-requests/${id}/${approve ? "approve" : "reject"}`, body),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: ["return-requests"] });
+      client.invalidateQueries({ queryKey: ["allocations"] });
+      client.invalidateQueries({ queryKey: ["assets-ref"] });
+      setReturnToApprove(null);
+    },
   });
   return (
     <Page
@@ -162,6 +196,73 @@ export function AllocationsPage() {
           </table>
         )}
       </Card>
+      {auth.hasRole("ASSET_MANAGER") && (
+        <Card>
+          <h2>Pending return approvals</h2>
+          {returns.isLoading ? (
+            <Loading />
+          ) : returns.error ? (
+            <ErrorState error={returns.error} />
+          ) : !returns.data?.some((item) => item.status === "PENDING") ? (
+            <Empty>No returns need approval.</Empty>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Proposed condition</th>
+                  <th>Notes</th>
+                  <th>Requested</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {returns.data
+                  .filter((item) => item.status === "PENDING")
+                  .map((item) => {
+                    const allocation = query.data?.find(
+                      (row) => row.id === item.allocationId,
+                    );
+                    const asset = refs.assets.find(
+                      (row) => row.id === allocation?.assetId,
+                    );
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          {asset
+                            ? `${asset.assetTag} · ${asset.name}`
+                            : item.allocationId.slice(0, 8)}
+                        </td>
+                        <td>{item.proposedCondition ?? "—"}</td>
+                        <td>{item.requestNotes ?? "—"}</td>
+                        <td>{displayDate(item.createdAt)}</td>
+                        <td className="actions">
+                          <button onClick={() => setReturnToApprove(item)}>
+                            Review
+                          </button>
+                          <button
+                            onClick={() =>
+                              decideReturn.mutate({
+                                id: item.id,
+                                approve: false,
+                                body: {
+                                  decisionNotes:
+                                    "Return rejected after review.",
+                                },
+                              })
+                            }
+                          >
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      )}
       <Modal title="Allocate asset" open={open} onClose={() => setOpen(false)}>
         <form
           onSubmit={(event) => {
@@ -237,6 +338,54 @@ export function AllocationsPage() {
               Cancel
             </button>
             <button className="primary">Allocate</button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        title="Approve return"
+        open={Boolean(returnToApprove)}
+        onClose={() => setReturnToApprove(null)}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!returnToApprove) return;
+            const values = Object.fromEntries(
+              new FormData(event.currentTarget),
+            );
+            decideReturn.mutate({
+              id: returnToApprove.id,
+              approve: true,
+              body: values,
+            });
+          }}
+        >
+          <Field label="Check-in condition">
+            <select
+              name="checkinCondition"
+              defaultValue={returnToApprove?.proposedCondition ?? "GOOD"}
+            >
+              {["NEW", "GOOD", "FAIR", "POOR", "DAMAGED", "UNKNOWN"].map(
+                (value) => (
+                  <option key={value}>{value}</option>
+                ),
+              )}
+            </select>
+          </Field>
+          <Field label="Check-in notes">
+            <textarea name="checkinNotes" required rows={3} />
+          </Field>
+          <Field label="Decision notes">
+            <textarea name="decisionNotes" rows={2} />
+          </Field>
+          {decideReturn.error && (
+            <p className="form-error">{decideReturn.error.message}</p>
+          )}
+          <div className="form-actions">
+            <button type="button" onClick={() => setReturnToApprove(null)}>
+              Cancel
+            </button>
+            <button className="primary">Approve return</button>
           </div>
         </form>
       </Modal>
@@ -503,12 +652,22 @@ export function BookingsPage() {
                       <div className="actions">
                         <button
                           onClick={() => {
-                            const startAt = window.prompt("New start time (ISO 8601)", booking.startAt);
-                            const endAt = window.prompt("New end time (ISO 8601)", booking.endAt);
+                            const startAt = window.prompt(
+                              "New start time (ISO 8601)",
+                              booking.startAt,
+                            );
+                            const endAt = window.prompt(
+                              "New end time (ISO 8601)",
+                              booking.endAt,
+                            );
                             if (startAt && endAt)
                               command.mutate({
                                 path: `/bookings/${booking.id}/reschedule`,
-                                body: { startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), reason: "Cancel and rebook" },
+                                body: {
+                                  startAt: new Date(startAt).toISOString(),
+                                  endAt: new Date(endAt).toISOString(),
+                                  reason: "Cancel and rebook",
+                                },
                               });
                           }}
                         >
