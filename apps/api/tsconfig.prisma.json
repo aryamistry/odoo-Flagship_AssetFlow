@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"], "noEmit": true },
+  "include": ["prisma/**/*.ts", "src/platform/auth/password.ts"]
+}
+

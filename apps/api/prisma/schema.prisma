@@ -1,0 +1,568 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+enum RoleType {
+  EMPLOYEE
+  ADMIN
+  ASSET_MANAGER
+  DEPARTMENT_HEAD
+}
+enum LocationType {
+  SITE
+  BUILDING
+  FLOOR
+  ROOM
+  AREA
+  OTHER
+}
+enum AssetStatus {
+  AVAILABLE
+  ALLOCATED
+  RESERVED
+  UNDER_MAINTENANCE
+  LOST
+  RETIRED
+  DISPOSED
+}
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+  UNKNOWN
+}
+enum FieldType {
+  TEXT
+  LONG_TEXT
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  DATE
+  DATETIME
+  SELECT
+  MULTI_SELECT
+}
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+enum AllocationEndReason {
+  RETURNED
+  TRANSFERRED
+  MAINTENANCE
+  LOST
+  RETIRED
+  DISPOSED
+  ADMIN_CORRECTION
+}
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+enum MaintenanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  TECHNICIAN_ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+enum MaintenanceOutcome {
+  RESTORE_PREVIOUS_ALLOCATION
+  MAKE_AVAILABLE
+  RETIRE
+  MARK_LOST
+}
+enum AuditStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  CLOSED
+  CANCELLED
+}
+enum AuditItemResult {
+  PENDING
+  VERIFIED
+  MISSING
+  DAMAGED
+}
+enum DiscrepancyType {
+  MISSING
+  DAMAGED
+  LOCATION_MISMATCH
+  CUSTODIAN_MISMATCH
+  OTHER
+}
+enum DiscrepancyStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+enum DiscrepancyAction {
+  MARK_LOST
+  CREATE_MAINTENANCE
+  CORRECT_LOCATION
+  CORRECT_CUSTODIAN
+  MARK_VERIFIED
+  DISMISS
+}
+
+model Organization {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  defaultTimezone String @default("Asia/Kolkata") @map("default_timezone")
+  status RecordStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@map("organizations")
+}
+
+model Department {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  parentDepartmentId String? @map("parent_department_id") @db.Uuid
+  code String
+  name String
+  description String?
+  status RecordStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@map("departments")
+}
+
+model Location {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  parentLocationId String? @map("parent_location_id") @db.Uuid
+  code String
+  name String
+  type LocationType
+  description String?
+  status RecordStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, code])
+  @@map("locations")
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  primaryDepartmentId String? @map("primary_department_id") @db.Uuid
+  employeeCode String? @map("employee_code")
+  firstName String @map("first_name")
+  lastName String? @map("last_name")
+  email String
+  passwordHash String @map("password_hash")
+  status UserStatus @default(ACTIVE)
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, email])
+  @@unique([organizationId, employeeCode])
+  @@map("users")
+}
+
+model UserRole {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  role RoleType
+  departmentId String? @map("department_id") @db.Uuid
+  assignedByUserId String? @map("assigned_by_user_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  @@index([userId, revokedAt])
+  @@map("user_roles")
+}
+
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  tokenHash String @unique @map("token_hash")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model AssetCategory {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  code String
+  name String
+  description String?
+  defaultUsefulLifeMonths Int? @map("default_useful_life_months")
+  status RecordStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, code])
+  @@map("asset_categories")
+}
+
+model CategoryFieldDefinition {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+  fieldKey String @map("field_key")
+  label String
+  fieldType FieldType @map("field_type")
+  isRequired Boolean @default(false) @map("is_required")
+  optionsJson Json? @map("options_json")
+  validationJson Json? @map("validation_json")
+  sortOrder Int @default(0) @map("sort_order")
+  status RecordStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([categoryId, fieldKey])
+  @@map("category_field_definitions")
+}
+
+model Asset {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetTag String @map("asset_tag")
+  qrToken String @default(uuid()) @map("qr_token") @db.Uuid
+  qrCode String? @map("qr_code")
+  name String
+  description String?
+  categoryId String @map("category_id") @db.Uuid
+  serialNumber String? @map("serial_number")
+  owningDepartmentId String? @map("owning_department_id") @db.Uuid
+  currentLocationId String? @map("current_location_id") @db.Uuid
+  status AssetStatus @default(AVAILABLE)
+  condition AssetCondition @default(GOOD)
+  isBookable Boolean @default(false) @map("is_bookable")
+  acquisitionDate DateTime? @map("acquisition_date") @db.Date
+  acquisitionCostMinor BigInt? @map("acquisition_cost_minor")
+  acquisitionCurrency String? @map("acquisition_currency") @db.Char(3)
+  expectedRetirementOn DateTime? @map("expected_retirement_on") @db.Date
+  attachmentUrl String? @map("attachment_url")
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, assetTag])
+  @@unique([organizationId, serialNumber])
+  @@unique([organizationId, qrCode])
+  @@unique([qrToken])
+  @@index([organizationId, status])
+  @@index([organizationId, categoryId])
+  @@map("assets")
+}
+
+model AssetFieldValue {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  fieldDefinitionId String @map("field_definition_id") @db.Uuid
+  valueJson Json @map("value_json")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([assetId, fieldDefinitionId])
+  @@map("asset_field_values")
+}
+
+model AssetStatusHistory {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  fromStatus AssetStatus? @map("from_status")
+  toStatus AssetStatus @map("to_status")
+  reasonCode String @map("reason_code")
+  reasonText String? @map("reason_text")
+  sourceType String @map("source_type")
+  sourceId String? @map("source_id") @db.Uuid
+  changedByUserId String? @map("changed_by_user_id") @db.Uuid
+  changedAt DateTime @default(now()) @map("changed_at") @db.Timestamptz
+  @@index([assetId, changedAt])
+  @@map("asset_status_history")
+}
+
+model ResourceProfile {
+  assetId String @id @map("asset_id") @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  timezone String
+  minimumDurationMinutes Int @default(15) @map("minimum_duration_minutes")
+  maximumDurationMinutes Int? @map("maximum_duration_minutes")
+  bufferBeforeMinutes Int @default(0) @map("buffer_before_minutes")
+  bufferAfterMinutes Int @default(0) @map("buffer_after_minutes")
+  advanceBookingDays Int? @map("advance_booking_days")
+  requiresApproval Boolean @default(false) @map("requires_approval")
+  allowDepartmentBooking Boolean @default(true) @map("allow_department_booking")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@map("resource_profiles")
+}
+
+model Allocation {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  allocatedToUserId String? @map("allocated_to_user_id") @db.Uuid
+  allocatedToDepartmentId String? @map("allocated_to_department_id") @db.Uuid
+  allocatedByUserId String @map("allocated_by_user_id") @db.Uuid
+  allocatedAt DateTime @default(now()) @map("allocated_at") @db.Timestamptz
+  expectedReturnAt DateTime? @map("expected_return_at") @db.Timestamptz
+  checkoutCondition AssetCondition @map("checkout_condition")
+  checkoutNotes String? @map("checkout_notes")
+  endedAt DateTime? @map("ended_at") @db.Timestamptz
+  endedByUserId String? @map("ended_by_user_id") @db.Uuid
+  endReason AllocationEndReason? @map("end_reason")
+  checkinCondition AssetCondition? @map("checkin_condition")
+  checkinNotes String? @map("checkin_notes")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@index([organizationId, expectedReturnAt])
+  @@map("allocations")
+}
+
+model TransferRequest {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  sourceAllocationId String @map("source_allocation_id") @db.Uuid
+  requestedByUserId String @map("requested_by_user_id") @db.Uuid
+  toUserId String? @map("to_user_id") @db.Uuid
+  toDepartmentId String? @map("to_department_id") @db.Uuid
+  reason String
+  status TransferStatus @default(PENDING)
+  decidedByUserId String? @map("decided_by_user_id") @db.Uuid
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz
+  decisionNotes String? @map("decision_notes")
+  resultingAllocationId String? @unique @map("resulting_allocation_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@map("transfer_requests")
+}
+
+model ReturnRequest {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  allocationId String @map("allocation_id") @db.Uuid
+  requestedByUserId String @map("requested_by_user_id") @db.Uuid
+  status ReturnStatus @default(PENDING)
+  proposedCondition AssetCondition? @map("proposed_condition")
+  requestNotes String? @map("request_notes")
+  decidedByUserId String? @map("decided_by_user_id") @db.Uuid
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz
+  checkinCondition AssetCondition? @map("checkin_condition")
+  checkinNotes String? @map("checkin_notes")
+  decisionNotes String? @map("decision_notes")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@map("return_requests")
+}
+
+model Booking {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  requestedByUserId String @map("requested_by_user_id") @db.Uuid
+  bookedForUserId String? @map("booked_for_user_id") @db.Uuid
+  bookedForDepartmentId String? @map("booked_for_department_id") @db.Uuid
+  title String
+  purpose String?
+  startAt DateTime @map("start_at") @db.Timestamptz
+  endAt DateTime @map("end_at") @db.Timestamptz
+  effectiveStartAt DateTime @map("effective_start_at") @db.Timestamptz
+  effectiveEndAt DateTime @map("effective_end_at") @db.Timestamptz
+  status BookingStatus
+  cancelledByUserId String? @map("cancelled_by_user_id") @db.Uuid
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz
+  cancellationReason String? @map("cancellation_reason")
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  rescheduledFromBookingId String? @unique @map("rescheduled_from_booking_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@index([assetId, startAt])
+  @@map("bookings")
+}
+
+model MaintenanceRequest {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  requestedByUserId String @map("requested_by_user_id") @db.Uuid
+  issueDescription String @map("issue_description")
+  priority MaintenancePriority
+  status MaintenanceStatus @default(PENDING)
+  attachmentUrl String? @map("attachment_url")
+  assignedTechnicianUserId String? @map("assigned_technician_user_id") @db.Uuid
+  approvedByUserId String? @map("approved_by_user_id") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+  rejectedByUserId String? @map("rejected_by_user_id") @db.Uuid
+  rejectedAt DateTime? @map("rejected_at") @db.Timestamptz
+  rejectionReason String? @map("rejection_reason")
+  startedAt DateTime? @map("started_at") @db.Timestamptz
+  resolvedByUserId String? @map("resolved_by_user_id") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz
+  resolutionNotes String? @map("resolution_notes")
+  resolutionOutcome MaintenanceOutcome? @map("resolution_outcome")
+  previousAssetStatus AssetStatus? @map("previous_asset_status")
+  previousAllocationId String? @map("previous_allocation_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@index([organizationId, status, priority])
+  @@map("maintenance_requests")
+}
+
+model MaintenanceEvent {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  maintenanceRequestId String @map("maintenance_request_id") @db.Uuid
+  fromStatus MaintenanceStatus? @map("from_status")
+  toStatus MaintenanceStatus @map("to_status")
+  performedByUserId String? @map("performed_by_user_id") @db.Uuid
+  notes String?
+  metadataJson Json? @map("metadata_json")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@index([maintenanceRequestId, createdAt])
+  @@map("maintenance_events")
+}
+
+model AuditCycle {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  code String
+  name String
+  description String?
+  status AuditStatus @default(DRAFT)
+  startDate DateTime @map("start_date") @db.Date
+  endDate DateTime @map("end_date") @db.Date
+  scopeDepartmentId String? @map("scope_department_id") @db.Uuid
+  scopeLocationId String? @map("scope_location_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  startedAt DateTime? @map("started_at") @db.Timestamptz
+  reviewStartedAt DateTime? @map("review_started_at") @db.Timestamptz
+  closedAt DateTime? @map("closed_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([organizationId, code])
+  @@map("audit_cycles")
+}
+
+model AuditAssignment {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  auditCycleId String @map("audit_cycle_id") @db.Uuid
+  auditorUserId String @map("auditor_user_id") @db.Uuid
+  assignedByUserId String @map("assigned_by_user_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  @@index([auditCycleId, auditorUserId])
+  @@map("audit_assignments")
+}
+
+model AuditItem {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  auditCycleId String @map("audit_cycle_id") @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  snapshotAssetTag String @map("snapshot_asset_tag")
+  snapshotAssetName String @map("snapshot_asset_name")
+  expectedStatus AssetStatus @map("expected_status")
+  expectedCondition AssetCondition @map("expected_condition")
+  expectedLocationId String? @map("expected_location_id") @db.Uuid
+  expectedDepartmentId String? @map("expected_department_id") @db.Uuid
+  expectedHolderUserId String? @map("expected_holder_user_id") @db.Uuid
+  expectedHolderDepartmentId String? @map("expected_holder_department_id") @db.Uuid
+  result AuditItemResult @default(PENDING)
+  observedLocationId String? @map("observed_location_id") @db.Uuid
+  observedCondition AssetCondition? @map("observed_condition")
+  checkedByUserId String? @map("checked_by_user_id") @db.Uuid
+  checkedAt DateTime? @map("checked_at") @db.Timestamptz
+  notes String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@unique([auditCycleId, assetId])
+  @@map("audit_items")
+}
+
+model AuditDiscrepancy {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  auditItemId String @map("audit_item_id") @db.Uuid
+  type DiscrepancyType
+  status DiscrepancyStatus @default(OPEN)
+  details String?
+  resolutionAction DiscrepancyAction? @map("resolution_action")
+  resolutionNotes String? @map("resolution_notes")
+  resolvedByUserId String? @map("resolved_by_user_id") @db.Uuid
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz
+  relatedMaintenanceRequestId String? @map("related_maintenance_request_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  @@index([auditItemId, status])
+  @@map("audit_discrepancies")
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  recipientUserId String @map("recipient_user_id") @db.Uuid
+  type String
+  title String
+  body String
+  entityType String? @map("entity_type")
+  entityId String? @map("entity_id") @db.Uuid
+  dedupKey String? @map("dedup_key")
+  readAt DateTime? @map("read_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@index([recipientUserId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  actorUserId String? @map("actor_user_id") @db.Uuid
+  action String
+  entityType String @map("entity_type")
+  entityId String? @map("entity_id") @db.Uuid
+  requestId String? @map("request_id") @db.Uuid
+  summary String
+  beforeJson Json? @map("before_json")
+  afterJson Json? @map("after_json")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  @@index([organizationId, createdAt])
+  @@map("activity_logs")
+}
