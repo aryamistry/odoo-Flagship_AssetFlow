@@ -26,7 +26,7 @@ const availability = z
   )
   .nullable()
   .optional();
-const bookingInput = times
+const bookingInputBase = times
   .extend({
     assetId: id,
     bookedForUserId: id.optional(),
@@ -40,11 +40,12 @@ const bookingInput = times
         occurrences: z.number().int().min(2).max(52),
       })
       .optional(),
-  })
-  .refine(
-    (value) => !(value.bookedForUserId && value.bookedForDepartmentId),
-    "Choose either an employee or department.",
-  );
+  });
+const bookingInput = bookingInputBase.refine(
+  (value) => !(value.bookedForUserId && value.bookedForDepartmentId),
+  "Choose either an employee or department.",
+);
+const waitlistInput = bookingInputBase.omit({ assetId: true, recurrence: true });
 const resourceProfileInput = z.object({
   timezone: z.string().min(1).optional(),
   minimumDurationMinutes: z.number().int().min(1).optional(),
@@ -58,7 +59,6 @@ const resourceProfileInput = z.object({
   availability,
   allowRecurring: z.boolean().optional(),
 });
-const waitlistInput = bookingInput.omit({ assetId: true, recurrence: true });
 
 bookingRouter.get(
   "/bookings",
